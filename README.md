@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/skill-arena-banner.png" alt="Skill Arena：不同 skill 分别完成同一任务，再比较结果" width="100%">
+  <img src="assets/skill-arena-banner.png" alt="Skill Arena：用户提出任务，多个 skill 分别生成方案，独立评估给出排名和理由，再由用户查看、选择与反馈" width="100%">
 </p>
 
 <h1 align="center">Skill Arena</h1>
@@ -56,3 +56,4 @@
 - [研究参考与设计考虑](references/research.md)
 
 </details>
+
