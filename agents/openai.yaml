@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Arena · 独立对比与评估"
+  short_description: "自动发现候选技能，独立生成同一任务的结果，并用证据评估排序与积累复用记录"
+  default_prompt: "使用 $skill-arena 为我的任务自动选择 3–5 个 skill，独立生成结果并评估排序，保存本地报告、原件和可复用来源。"
