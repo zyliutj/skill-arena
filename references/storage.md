@@ -35,7 +35,7 @@ candidate.json 必备：id、name、source（仓库或 SKILL.md 可访问地址�
 
 variants.json 是数组，例如 `[{"id":"candidate-a","artifacts":["answer.md","sources.md"]}]`。必须包含所有参赛项；失败项也建目录并提供 failure.md。不要把 execution.json、自评分或身份说明放进评估包。原件包含身份时手工创建匿名副本并记录改动，禁止改动实质内容。packet 会随机排列且拒绝覆盖已存在评估包。
 
-protocol.json 初始为 draft；派发前填写明确预算、网络策略、模型设置及任务约束，设为 frozen。rubric.json 除 weights、tie_threshold 外应加入 anchors、hard_conditions；评估者依据这些字段判断，脚本仅校验算术与数据完整性。
+protocol.json 初始为 draft；派发前填写统一 Codex 模型、网络策略及任务约束，设为 frozen。equal_budget 固定为 false；user_limits 仅记录用户主动提出的总限制，没有则为 null，不要求用户填写。没有附件时 inputs 可为空。rubric.json 除 weights、tie_threshold 外应加入 anchors、hard_conditions；评估者依据这些字段判断，脚本仅校验算术与数据完整性。
 
 history-record.json 必备 run_id、task_tags、skill_versions、environment、status、report_path、synthetic=false。应附 ranking、failure_reasons、user_feedback、limitations；禁止把演示测试当作实测。find 是简单大小写不敏感检索，语义相似性由协调代理复核。
 

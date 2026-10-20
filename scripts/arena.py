@@ -70,7 +70,7 @@ def new_run(root, run_id):
         (path / name).mkdir()
     (path / 'task.md').write_text('请在派发前写入冻结任务。\n', encoding='utf-8')
     write(path / 'rubric.json', {'weights': {'需求契合': 25, '事实与证据': 25, '方法逻辑': 25, '可执行性': 15, '表达交付': 10}, 'tie_threshold': 3})
-    write(path / 'protocol.json', {'created_at': stamp(), 'status': 'draft', 'model': 'unknown', 'isolation': 'context-only', 'budget': None, 'network_policy': None, 'common_support_skills': [], 'retry_policy': 'one infrastructure retry; preserve attempts'})
+    write(path / 'protocol.json', {'created_at': stamp(), 'status': 'draft', 'model': 'unknown', 'isolation': 'context-only', 'equal_budget': False, 'user_limits': None, 'network_policy': None, 'common_support_skills': [], 'retry_policy': 'one infrastructure retry; preserve attempts'})
     return path
 
 
