@@ -10,6 +10,37 @@ spec.loader.exec_module(arena)
 
 
 class ArenaTest(unittest.TestCase):
+    def test_selection_priority_missing_and_log_stars(self):
+        record = {'scores': {k: 4 for k in ('task_fit', 'workflow', 'compatibility', 'maintenance')}}
+        self.assertEqual(arena.selection_priority(record)['total'], 80)
+        self.assertTrue(arena.selection_priority(record)['provisional'])
+        record['stars_status'] = 'not_applicable'
+        self.assertFalse(arena.selection_priority(record)['provisional'])
+        record.update(stars_status='known', stars=999, stars_checked_at='2026-10-21')
+        self.assertEqual(arena.selection_priority(record)['total'], 77)
+        for stars in (-1, True, 1.5):
+            record['stars'] = stars
+            with self.assertRaises(ValueError): arena.selection_priority(record)
+
+    def test_toolkit_overview_does_not_change_judging_or_leak_into_packet(self):
+        self.fixture()
+        before = arena.report(self.run)
+        metadata = {'id': 'one', 'candidate_type': 'toolkit', 'source': 'https://github.com/example/toolkit',
+                    'repository': 'example/toolkit', 'version': 'fixed-sha', 'reason': '<script>bad</script>',
+                    'stars_status': 'known', 'stars': 99999, 'stars_checked_at': '2026-10-21',
+                    'scores': {k: 5 for k in ('task_fit', 'workflow', 'compatibility', 'maintenance')}}
+        arena.write(self.run / 'discovery.json', {'candidates': [metadata]})
+        arena.write(self.run / 'variants' / 'one' / 'execution.json', {'modules_used': ['planning']})
+        after = arena.report(self.run)
+        self.assertEqual(before, after)
+        page = (self.run / 'report.html').read_text(encoding='utf-8')
+        self.assertIn('toolkit', page)
+        self.assertIn('planning', page)
+        self.assertIn('99999', page)
+        self.assertIn('未记录', page)
+        self.assertNotIn('<script>', page)
+        self.assertFalse(any(p.name in {'discovery.json', 'execution.json'} for p in (self.run / 'judge-packet').rglob('*')))
+
     def setUp(self):
         temp = Path(__file__).resolve().parents[1] / 'data' / 'tmp'
         temp.mkdir(parents=True, exist_ok=True)

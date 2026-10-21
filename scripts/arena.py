@@ -58,10 +58,90 @@ def register(root, record):
     if any(k not in record for k in required) or not isinstance(record['tags'], list):
         raise ValueError('Record requires ' + ', '.join(required))
     identifier(record['id'])
+    if 'scores' in record:
+        record['selection_priority'] = selection_priority(record)
     db = read(Path(root) / 'registry.json')
     record['checked_at'] = stamp()
     db['skills'] = [s for s in db['skills'] if s['id'] != record['id']] + [record]
     write(Path(root) / 'registry.json', db)
+
+
+def selection_priority(record):
+    """Selection heuristic only. Never used for judging output quality."""
+    weights = {'task_fit': 35, 'workflow': 25, 'compatibility': 15, 'maintenance': 10}
+    scores = record['scores']
+    for key in weights:
+        value = scores.get(key)
+        if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 5:
+            raise ValueError('Invalid selection score: ' + key)
+    total = sum(weights[k] * scores[k] / 5 for k in weights)
+    state = record.get('stars_status', 'unknown')
+    if state not in {'known', 'unknown', 'not_applicable'}:
+        raise ValueError('Invalid stars status')
+    star_score = None
+    if state == 'known':
+        stars = record.get('stars')
+        if type(stars) is not int or stars < 0 or not record.get('stars_checked_at'):
+            raise ValueError('Known stars require nonnegative integer and check date')
+        star_score = min(5, math.log10(1 + stars))
+        total += 15 * star_score / 5
+    else:
+        total = total * 100 / 85
+    return {'total': round(total, 2), 'star_score': star_score,
+            'provisional': state == 'unknown', 'stars_status': state}
+
+
+def candidate_overview(run, mapping):
+    """Use run-frozen metadata, with transparent fallback for historical runs."""
+    run = Path(run)
+    metadata = {}
+    discovery = run / 'discovery.json'
+    if discovery.exists():
+        metadata = {x['id']: x for x in read(discovery).get('candidates', [])}
+    lines = ['## 本轮用了哪些候选？', '', '筛选优先级不参与结果质量评分；stars属于来源仓库。', '']
+    cards = ['<section><h2>本轮用了哪些候选？</h2><p>筛选优先级不参与结果质量评分；stars属于来源仓库。</p>']
+    for item in mapping.values():
+        ident = identifier(item['id'])
+        data = {**metadata.get(item.get('skill_id') or ident, {}), **item}
+        baseline = item.get('kind') == 'baseline' or ident == 'baseline'
+        lines += ['### ' + candidate_label(item), '']
+        cards.append('<h3>' + html.escape(candidate_label(item)) + '</h3>')
+        execution = run / 'variants' / ident / 'execution.json'
+        log = read(execution) if execution.exists() else {}
+        star_state = data.get('stars_status', 'unknown')
+        stars = (str(data.get('stars')) + '（' + str(data.get('stars_checked_at', '未记录日期')) + '）'
+                 if star_state == 'known' else '不适用' if star_state == 'not_applicable' or baseline else '未记录/未核验')
+        values = {'比较单位': '普通提示词基线' if baseline else data.get('candidate_type', '未记录'),
+                  '来源仓库': data.get('repository', '未记录'), 'stars / 查询日期': stars,
+                  '固定版本': data.get('version', '未记录'), '入选理由': data.get('reason', data.get('fit_reason', '未记录')),
+                  '实际模块': log.get('modules_used', data.get('modules_used', '未记录')),
+                  '主要限制': data.get('limitations', '未记录')}
+        if 'scores' in data:
+            priority = selection_priority(data)
+            values['筛选优先级'] = str(priority['total']) + ('（暂定，stars缺失）' if priority['provisional'] else '')
+        for key, value in values.items():
+            value = json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value)
+            lines.append('- ' + key + '：' + value.replace('\n', ' '))
+            cards.append('<p><b>' + key + '</b>：' + html.escape(value) + '</p>')
+        links = []
+        source = data.get('source', '')
+        if isinstance(source, str) and source.startswith(('https://', 'http://')):
+            links.append(('原始来源', source))
+        snapshot_id = identifier(item.get('skill_id') or ident)
+        snap = run / 'snapshots' / snapshot_id / 'SKILL.md'
+        if snap.is_file(): links.append(('实际使用的 SKILL.md', snap.resolve().as_uri()))
+        if execution.is_file(): links.append(('执行记录', execution.resolve().as_uri()))
+        for label, url in links:
+            cards.append('<p><a href="' + html.escape(url, quote=True) + '">' + label + '</a></p>')
+            lines.append('- [' + label + '](<' + url + '>)')
+        lines.append('')
+    for path in (run / 'discovery.md', discovery):
+        if path.is_file():
+            url = path.resolve().as_uri()
+            cards.append('<p><a href="' + url + '">' + path.name + '：完整调查与取舍</a></p>')
+            lines.append('- [完整调查与取舍：' + path.name + '](<' + url + '>)')
+    cards.append('</section>')
+    return lines + [''], ''.join(cards)
 
 
 def new_run(root, run_id):
@@ -229,7 +309,8 @@ def report(run):
     title = '方案质量检查' if single else 'Skill 对比报告'
     if single:
         rows[0]['rank'] = None
-    lines = ['# ' + title, '', '方案编号固定，排名不作为选择编号。评分只适用于本次任务与版本；并列阈值不是统计置信区间。', '']
+    overview_lines, overview_html = candidate_overview(run, mapping)
+    lines = ['# ' + title, '', '方案编号固定，排名不作为选择编号。评分只适用于本次任务与版本；并列阈值不是统计置信区间。', ''] + overview_lines
     lines += ['| 方案 | 排名 | 候选 | 状态 | 质量分 |', '|---|---|---|---|---|']
     table = '<table><tr><th>方案</th><th>排名</th><th>候选</th><th>状态</th><th>质量分</th></tr>'
     for r in rows:
@@ -237,7 +318,7 @@ def report(run):
         lines.append('| ' + ' | '.join(cells) + ' |')
         table += '<tr>' + ''.join('<td>' + html.escape(c) + '</td>' for c in cells) + '</tr>'
     lines += ['']
-    cards = [table + '</table>']
+    cards = [overview_html, table + '</table>']
     for r in rows:
         item = mapping[r['id']]
         heading = f"{candidate_label(item)}（编号 {r['id']}）— 排名 {r['rank'] or '—'} — {r['status']} — {r['total'] if r['total'] is not None else '未评分'}"
