@@ -16,6 +16,7 @@ DATA_ROOT/
     mapping.json                解盲映射，评估者不可读
     evaluation/                 judge.json、verification.md、order-check.md
     report.html / report.md / ranking.json
+    interaction.json             会话分步提问参数、真实名称及候选映射
     feedback/EVENT_ID.json        每次用户选择与操作要求
     state.json                   本轮已认可方案索引
     lineage.json                 子轮的来源、操作和分支文件哈希
@@ -38,6 +39,8 @@ python scripts/arena.py remember data data/tmp/history-record.json
 candidate.json 必备：id、name、source（仓库或 SKILL.md 可访问地址）、version（commit/tag，无法获取则 unknown）、tags（任务类型/领域/交付物）、local_path、license。可附 dependency、fit_reason、limitations、last_run。register 更新索引，不覆盖旧运行快照。相对路径以调用工作目录解析；建议使用绝对路径。
 
 variants.json 是数组，例如 `[{"id":"candidate-a","artifacts":["answer.md","sources.md"]}]`。必须包含所有参赛项；失败项也建目录并提供 failure.md。不要把 execution.json、自评分或身份说明放进评估包。原件包含身份时手工创建匿名副本并记录改动，禁止改动实质内容。packet 会随机排列且拒绝覆盖已存在评估包。
+
+为清晰展示与候选调整，manifest 每项应另附 `display_name`（真实 skill 名称，同名时附结果短标题）、`skill_id`、`kind`（skill 或 baseline）。这些字段只进入包外 mapping.json，不暴露给评估代理。普通提示词必须标为 baseline，不只依赖其文件夹名称。
 
 protocol.json 初始为 draft；派发前填写统一 Codex 模型、网络策略及任务约束，设为 frozen。equal_budget 固定为 false；user_limits 仅记录用户主动提出的总限制，没有则为 null，不要求用户填写。没有附件时 inputs 可为空。rubric.json 除 weights、tie_threshold 外应加入 anchors、hard_conditions；评估者依据这些字段判断，脚本仅校验算术与数据完整性。
 
@@ -71,3 +74,17 @@ request.json 的 mode 为 refine / redo / continue；variants 为父轮真实 ID
 - 同一反馈事件不可因记录工具重试而重复提交；先查看 feedback 和 state。followup 拒绝覆盖已有子轮，若中途失败，检查已有子轮与事件后补完准备，不能盲目重复执行。
 - 子轮生成不代表用户认可它。未再次选择时，以最近明确认可的祖先轮次为选择来源，协调者沿 lineage 查找对应 state；显式方案指代则以用户指定轮次为准。无关任务不自动沿用此选择。
 - 反馈文件保留用户原话和已解析操作，只有 select/continue 更新 selected；refine/redo 不把不满意的方案标记为认可。用户偏好可另外追加真实 history 事件；测试只在临时目录运行。
+
+### 调整候选与会话控件
+
+feedback/followup 同样支持 `mode=adjust`，此时不要传 variants。示例：
+
+```json
+{"mode":"adjust","add_count":2,"remove":"lowest-two","instruction":"更关注建筑结构设计","user_message":"增加两款新 skill，并移除最低分的两款"}
+```
+
+add_count 支持 2（默认）或 0；remove 为明确的 variant ID 数组（默认空），或 lowest-two。后者读取父轮 ranking.json，排除基线、失败和待核验项，遇到评分不足或跨淘汰边界并列时拒绝，协调者需按 continuation.md 向用户澄清。保留 ID 自动计算，移除原件不会被删除。不能提交空操作或删光候选而不补充。
+
+新增数量大于零时，lineage.status 为 discovery-required。脚本只记录计划，不把计划当成已发现的 skill。协调者调查完成后记录 `added_candidates`（ID/来源/版本）和 `final_variants`，快照齐全后将状态改为 handoff-ready；若实际不足两款，记录原因与实际名单。同一 skill 不重复计数。报告仅比较本轮实际重新执行的结果。
+
+report 会输出 interaction.json。action、selection、adjustment 可作为可用原生提问工具的 questions 参数；协调者按阶段发送，不能一次把所有问题堆给用户。根据当前动作删除无关选项或补上“全部方案”。用户回复需映射到真实 variant ID，执行前重新核对轮次、名单和低分移除范围。不得把 JSON 生成成功当成控件已展示，也不得把控件默认选项当成用户回复。该脚本不会改变客户端界面。

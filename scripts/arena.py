@@ -128,6 +128,63 @@ def packet(run, manifest):
     return mapping
 
 
+def candidate_label(item, summary=''):
+    name = item.get('display_name') or item.get('skill_id') or item['id']
+    if item.get('kind') == 'baseline' or item['id'] == 'baseline':
+        name = '普通提示词（无 skill）'
+    return str(name) + (' — ' + ' '.join(summary.split())[:70] if summary else '')
+
+
+def lowest_two(run):
+    """Only eligible scored skills; a tie across the cutoff needs a human choice."""
+    run = Path(run)
+    mapping = read(run / 'mapping.json')
+    ranking = read(run / 'ranking.json')['results']
+    skills = []
+    for row in ranking:
+        item = mapping[row['id']]
+        score = row.get('total')
+        if (item.get('kind') != 'baseline' and item['id'] != 'baseline'
+                and row['status'] == 'eligible' and type(score) in (int, float)
+                and math.isfinite(score)):
+            skills.append((score, item['id']))
+    skills.sort()
+    if len(skills) < 2:
+        raise ValueError('Fewer than two scored eligible skills; choose removals by name')
+    threshold = read(run / 'rubric.json').get('tie_threshold', 3)
+    if len(skills) > 2 and skills[2][0] - skills[1][0] <= threshold:
+        raise ValueError('Tie across removal cutoff; choose removals by name')
+    return [item[1] for item in skills[:2]]
+
+
+def interaction(run, rows, mapping):
+    """Ready-to-use questions for the host's native choice/free-text tool."""
+    candidates = [{'variant_id': mapping[r['id']]['id'], 'alias': r['id'],
+                   'label': candidate_label(mapping[r['id']], r['summary'])} for r in rows]
+    try:
+        low = lowest_two(run)
+        names = [candidate_label(next(v for v in mapping.values() if v['id'] == x)) for x in low]
+        low_option = '移除评分最低的两款：' + '、'.join(names)
+        reason = None
+    except ValueError as exc:
+        low, reason = None, str(exc)
+        low_option = '查看评分后指定移除（存在并列或有效评分不足）'
+    payload = {
+        'run_id': Path(run).name,
+        'action': {'questions': [{'title': '这些结果里有满意的吗？请选择下一步，也可直接输入你的要求。',
+          'options': ['优化已有方案', '重做已有方案', '满意，接着做下一项任务', '都不满意，调整候选 skill', '先保留，暂不继续']}]},
+        'selection': {'questions': [{'title': '使用哪些方案？单项可点选；多项请在输入框写出名称，并补充修改要求或下一项任务。',
+          'options': [c['label'] for c in candidates]}]},
+        'adjustment': {'questions': [
+          {'title': '是否增加两款尚未尝试、适合当前任务的 skill？', 'options': ['增加 2 款新 skill', '不增加']},
+          {'title': '下一轮移除哪些候选？只退出下一轮，历史文件保留；也可输入具体名称。',
+           'options': ['保留现有候选', '我来指定移除的候选', low_option]}]},
+        'candidates': candidates, 'lowest_two': low, 'lowest_two_unavailable_reason': reason,
+        'dispatch': 'Coordinator calls available native question tool; this JSON does not render UI or authorize execution.'}
+    write(Path(run) / 'interaction.json', payload)
+    return payload
+
+
 def report(run):
     run = Path(run)
     rubric = read(run / 'rubric.json')
@@ -176,14 +233,14 @@ def report(run):
     lines += ['| 方案 | 排名 | 候选 | 状态 | 质量分 |', '|---|---|---|---|---|']
     table = '<table><tr><th>方案</th><th>排名</th><th>候选</th><th>状态</th><th>质量分</th></tr>'
     for r in rows:
-        cells = [r['id'], str(r['rank'] or '—'), identifier(mapping[r['id']]['id']), r['status'], '—' if r['total'] is None else f"{r['total']:.1f}"]
+        cells = [candidate_label(mapping[r['id']]) + '（编号 ' + r['id'] + '）', str(r['rank'] or '—'), identifier(mapping[r['id']]['id']), r['status'], '—' if r['total'] is None else f"{r['total']:.1f}"]
         lines.append('| ' + ' | '.join(cells) + ' |')
         table += '<tr>' + ''.join('<td>' + html.escape(c) + '</td>' for c in cells) + '</tr>'
     lines += ['']
     cards = [table + '</table>']
     for r in rows:
         item = mapping[r['id']]
-        heading = f"方案 {r['id']} · {item['id']} — 排名 {r['rank'] or '—'} — {r['status']} — {r['total'] if r['total'] is not None else '未评分'}"
+        heading = f"{candidate_label(item)}（编号 {r['id']}）— 排名 {r['rank'] or '—'} — {r['status']} — {r['total'] if r['total'] is not None else '未评分'}"
         lines += ['## ' + heading, '']
         card = '<section><h2>' + html.escape(heading) + '</h2>'
         for key in ('summary', 'strengths', 'weaknesses', 'best_for', 'uncertainty'):
@@ -201,13 +258,14 @@ def report(run):
             card += '<p><a href="' + html.escape(p.as_uri(), quote=True) + '">' + html.escape(rel) + '</a></p>'
         lines += ['']
         cards.append(card + '</section>')
-    first = rows[0]['id']
-    next_step = f'有满意的方案吗？可多选。回复“优化 {first}：改进要求”“重做 {first} / 全部重做”，或“满意 {first}，接着做：下一项任务”。也可以说“先保留 {first}”。'
+    first = candidate_label(mapping[rows[0]['id']])
+    next_step = f'回到会话即可选择优化、重做、继续下一步或调整候选，并输入具体要求。也可直接说“优化 {first}：改进要求”或“先保留 {first}”。都不满意时，可增加两款新 skill，并选择移除指定候选或评分最低的两款；历史结果保留。'
     lines += ['## 接下来', '', next_step, '']
     cards.append('<section><h2>接下来</h2><p>' + html.escape(next_step) + '</p></section>')
     (run / 'report.md').write_text('\n'.join(lines), encoding='utf-8')
     (run / 'report.html').write_text('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Skill 对比报告</title><style>body{font:16px/1.7 system-ui;max-width:1100px;margin:32px auto;padding:0 20px;background:#f5f7fa;color:#182539}section{background:white;border:1px solid #dde3ed;border-radius:12px;padding:24px;margin:20px 0}h1,h2{line-height:1.4}a{color:#1258af}p{white-space:pre-wrap}</style><h1>Skill 对比报告</h1><p>仅代表本次任务与版本；并列不是统计显著性结论。</p>' + ''.join(cards) + '</html>', encoding='utf-8')
     write(run / 'ranking.json', {'results': rows})
+    interaction(run, rows, mapping)
     if single:
         page = (run / 'report.html').read_text(encoding='utf-8').replace('Skill 对比报告', title)
         (run / 'report.html').write_text(page, encoding='utf-8')
@@ -218,17 +276,34 @@ def resolve_feedback(root, run_id, record):
     """Resolve an explicit request without writing or changing old results."""
     run = safe_child(Path(root) / 'runs', identifier(run_id))
     mode = record.get('mode')
-    if mode not in {'select', 'refine', 'redo', 'continue'}:
-        raise ValueError('Mode must be select, refine, redo, or continue')
+    if mode not in {'select', 'refine', 'redo', 'continue', 'adjust'}:
+        raise ValueError('Mode must be select, refine, redo, continue, or adjust')
     mapping = read(run / 'mapping.json')
     available = {identifier(item['id']): item for item in mapping.values()}
     variants = record.get('variants')
+    adjustment = {}
+    if mode == 'adjust':
+        if variants is not None:
+            raise ValueError('Adjust uses remove and add_count, not variants')
+        add_count = record.get('add_count', 2)
+        if type(add_count) is not int or add_count not in {0, 2}:
+            raise ValueError('Add count must be 0 or 2')
+        removed = record.get('remove', [])
+        if removed == 'lowest-two':
+            removed = lowest_two(run)
+        if (not isinstance(removed, list) or any(not isinstance(v, str) for v in removed)
+                or len(set(removed)) != len(removed) or any(v not in available for v in removed)):
+            raise ValueError('Remove requires unique existing variant IDs')
+        variants = [v for v in available if v not in removed]
+        if (not removed and not add_count) or (not variants and not add_count):
+            raise ValueError('Adjustment must change the roster and leave candidates')
+        adjustment = {'removed_variants': removed, 'add_count': add_count}
     if variants is None and mode == 'continue':
         state = run / 'state.json'
         variants = read(state).get('selected') if state.exists() else None
     if variants == 'all' and mode == 'redo':
         variants = list(available)
-    if (not isinstance(variants, list) or not variants
+    if (not isinstance(variants, list) or (not variants and mode != 'adjust')
             or any(not isinstance(v, str) for v in variants)
             or len(set(variants)) != len(variants)
             or any(v not in available for v in variants)):
@@ -255,7 +330,8 @@ def resolve_feedback(root, run_id, record):
                 raise ValueError('Selected branch has no artifacts')
         parents.append({'variant_id': variant, 'artifacts': artifacts})
     return {'run_id': run_id, 'mode': mode, 'variants': variants,
-            'instruction': instruction.strip(), 'user_message': user_message, 'parents': parents}
+            'instruction': instruction.strip(), 'user_message': user_message, 'parents': parents,
+            **adjustment}
 
 
 def feedback(root, run_id, record):
@@ -285,8 +361,11 @@ def followup(root, parent_id, child_id, record):
     write(child / 'lineage.json', {'parent_run_id': parent_id,
           'feedback_event_id': event['event_id'], 'mode': request['mode'],
           'variants': request['variants'], 'parents': request['parents'],
-          'instruction': request['instruction'], 'status': 'handoff-required',
-          'inherit_previous_answers': request['mode'] != 'redo'})
+          'instruction': request['instruction'],
+          'status': 'discovery-required' if request.get('add_count') else 'handoff-required',
+          'removed_variants': request.get('removed_variants', []),
+          'add_count': request.get('add_count', 0),
+          'inherit_previous_answers': request['mode'] in {'refine', 'continue'}})
     task = request['instruction'] if request['mode'] == 'continue' else original_task
     if request['mode'] != 'continue' and request['instruction']:
         task += '\n\n## User follow-up\n\n' + request['instruction']

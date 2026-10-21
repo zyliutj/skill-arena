@@ -140,7 +140,77 @@ class ArenaTest(unittest.TestCase):
         self.assertIsNone(result[0]['rank'])
         page = (self.run / 'report.html').read_text(encoding='utf-8')
         self.assertIn('方案质量检查', page)
-        self.assertIn('先保留 ' + alias, page)
+        self.assertIn('先保留 one', page)
+        ui = arena.read(self.run / 'interaction.json')
+        self.assertEqual(ui['candidates'][0]['variant_id'], 'one')
+        self.assertTrue(ui['selection']['questions'][0]['options'][0].startswith('one — '))
+
+    def test_adjust_add_and_remove_preserves_originals(self):
+        self.fixture()
+        child = arena.followup(self.root, 'test', 'adjusted',
+                               {'mode': 'adjust', 'add_count': 2, 'remove': ['two']})
+        lineage = arena.read(child / 'lineage.json')
+        self.assertEqual(set(lineage['variants']), {'one', 'failed'})
+        self.assertEqual(lineage['removed_variants'], ['two'])
+        self.assertEqual(lineage['add_count'], 2)
+        self.assertEqual(lineage['status'], 'discovery-required')
+        self.assertFalse(lineage['inherit_previous_answers'])
+        self.assertTrue(all(b['artifacts'] == [] for b in lineage['parents']))
+        self.assertTrue((self.run / 'variants' / 'two' / 'answer.md').exists())
+        self.assertEqual(arena.read(self.run / 'state.json')['selected'], [])
+
+    def test_adjust_only_remove_and_replace_all(self):
+        self.fixture()
+        child = arena.followup(self.root, 'test', 'reduced',
+                               {'mode': 'adjust', 'add_count': 0, 'remove': ['two']})
+        self.assertEqual(arena.read(child / 'lineage.json')['status'], 'handoff-required')
+        req = arena.resolve_feedback(self.root, 'test',
+              {'mode': 'adjust', 'add_count': 2, 'remove': ['one', 'two', 'failed']})
+        self.assertEqual(req['variants'], [])
+        for rec in [
+            {'mode': 'adjust', 'add_count': 0},
+            {'mode': 'adjust', 'add_count': 0, 'remove': ['one', 'two', 'failed']},
+            {'mode': 'adjust', 'remove': ['missing']},
+            {'mode': 'adjust', 'remove': ['one', 'one']},
+            {'mode': 'adjust', 'add_count': True},
+            {'mode': 'adjust', 'variants': ['one']},
+        ]:
+            with self.assertRaises(ValueError):
+                arena.followup(self.root, 'test', 'invalid-adjustment', rec)
+            self.assertFalse((self.root / 'runs' / 'invalid-adjustment').exists())
+
+    def test_lowest_two_excludes_baseline_and_requires_clear_cutoff(self):
+        mapping = {k: {'id': n, 'artifacts': [], 'kind': kind}
+                   for k, n, kind in [('A', 'one', 'skill'), ('B', 'two', 'skill'),
+                                     ('C', 'three', 'skill'), ('D', 'control', 'baseline'),
+                                     ('E', 'failed', 'skill')]}
+        arena.write(self.run / 'mapping.json', mapping)
+        rows = [{'id': k, 'status': 'eligible' if k != 'E' else 'failed', 'total': score}
+                for k, score in [('A', 40), ('B', 50), ('C', 80), ('D', 1), ('E', None)]]
+        arena.write(self.run / 'ranking.json', {'results': rows})
+        self.assertEqual(arena.lowest_two(self.run), ['one', 'two'])
+        request = arena.resolve_feedback(self.root, 'test',
+                                         {'mode': 'adjust', 'remove': 'lowest-two'})
+        self.assertEqual(request['removed_variants'], ['one', 'two'])
+        rows[2]['total'] = 52
+        arena.write(self.run / 'ranking.json', {'results': rows})
+        with self.assertRaises(ValueError): arena.lowest_two(self.run)
+        rows[1]['status'] = rows[2]['status'] = 'needs-review'
+        arena.write(self.run / 'ranking.json', {'results': rows})
+        with self.assertRaises(ValueError): arena.lowest_two(self.run)
+
+    def test_interaction_uses_names_and_composable_adjustment(self):
+        self.fixture()
+        mapping = arena.read(self.run / 'mapping.json')
+        for item in mapping.values():
+            item['display_name'] = 'Real skill ' + item['id']
+        arena.write(self.run / 'mapping.json', mapping)
+        arena.report(self.run)
+        ui = arena.read(self.run / 'interaction.json')
+        self.assertEqual(len(ui['adjustment']['questions']), 2)
+        self.assertEqual(set(ui['lowest_two']), {'one', 'two'})
+        self.assertTrue(all(c['label'].startswith('Real skill ') for c in ui['candidates']))
+        self.assertIn('Real skill one', ui['adjustment']['questions'][1]['options'][2])
 
 
 if __name__ == '__main__':
