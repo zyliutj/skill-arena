@@ -1,6 +1,6 @@
 ---
 name: skill-arena
-description: Discover and compare candidate skills by independently solving the same user task with each skill, then use a separate evaluator to rank complete outputs and remember task-specific performance. Use for skill selection, skill bake-offs, and side-by-side skill trials.
+description: Discover and compare skills through independent task solutions and evaluation, then refine, redo, or continue a multi-stage task with the user's selected skills. Use for skill selection, side-by-side trials, and follow-up work on selected results.
 ---
 
 # Skill Arena
@@ -9,7 +9,7 @@ description: Discover and compare candidate skills by independently solving the 
 
 ## 默认行为
 
-- 自动调查并选择 3–5 个适配候选，不重复请求用户选定。确实不足时如实说明，不凑数。额外运行一个不使用候选 skill 的基线；首次每项运行一次。
+- 首次任务自动调查并选择 3–5 个适配候选，不重复请求用户选定。确实不足时如实说明，不凑数。额外运行一个不使用候选 skill 的基线；首次每项运行一次。用户指定优化、重做或接续时，只运行所选项，不自动补足数量或追加基线。
 - 各生成代理、基线及评估代理使用相同的 Codex 模型，默认沿用当前模型；派发时明确模型标识，不因 skill 建议而换模型。无法核实时记录 unknown 并说明一致性尚未核验。不要求相同耗时、token 数、预算或推理设置，各 skill 按自身流程完成任务。默认使用现有订阅及已授权工具；新增付费服务、权限或外部发布需按实际授权处理。不得承诺并行运行无额度消耗。
 - 只在缺少会改变任务实质的信息时提问，并继续不依赖答案的工作。已有偏好持续有效。
 - 默认生成中文比较报告，原始交付物使用用户指定语言。先做本地结果；推送需有明确仓库及授权。
@@ -24,7 +24,7 @@ description: Discover and compare candidate skills by independently solving the 
 
 先用 `find` 查本地 registry，再检索新候选。首次或历史候选不足时调查公开仓库和当前可用技能；市场目录只作线索，最终读取真实 SKILL.md 及其必要资源。核对任务契合度、完整工作流、工具依赖、访问条件、维护状态及许可证；不能只按星数排序。记录查询、日期、来源、入选和淘汰理由到本次 discovery.md。
 
-相似问题按任务类型、领域、交付物、约束检索，不能仅关键词重合。历史成绩只适用于当时任务、版本和运行环境。至少考虑一个适配的新候选，若没有就说明；历史优胜者不自动胜出。
+相似问题按任务类型、领域、交付物、约束检索，不能仅关键词重合。历史成绩只适用于当时任务、版本和运行环境。重新选型时至少考虑一个适配的新候选，若没有就说明；历史优胜者不自动胜出。明确接续所选 skill 时遵循用户选择，不重新扩充候选。
 
 用 `register` 保存候选来源及本地路径；用 `snapshot` 把完整 skill 目录固定到本次运行目录并记录 SHA256，支持文件必须齐全。审阅陌生脚本后才执行，不自动运行仓库安装脚本。不要全局安装全部候选。授权不明的第三方资源仅存本地缓存，不打包发布。
 
@@ -48,4 +48,12 @@ description: Discover and compare candidate skills by independently solving the 
 
 把每次实际运行证据追加到 history.jsonl，保留版本、任务标签、环境、状态、报告路径及用户后续偏好。由协调者单写 registry/history，避免并发覆盖。测试和模拟分数不得写入真实历史。未来复用仍复核来源可用性与版本。
 
-完成后给用户报告和文件夹链接、前三项结论和限制。详细操作见 [数据与命令](references/storage.md)，研究依据及批判见 [设计依据](references/research.md)。
+完成后给用户报告和文件夹链接、前三项结论和限制，并进入下面的反馈交互。详细操作见 [数据与命令](references/storage.md)，研究依据及批判见 [设计依据](references/research.md)。
+
+## 5. 选择、优化与接续
+
+每轮结果末尾主动问用户是否有满意的方案，并给出三种简短回复方式：**优化 A：改进要求**、**重做 A/C 或全部：新要求**、**满意 A/C，接着做：下一项任务**。允许多选和自然语言，不要求填表；也允许“先保留 A，暂不继续”。用户已明确选择并给出任务时直接执行，不重复确认；只有“重做”没说明范围或方案指代有歧义时才澄清。没有回应时结束本轮，不自行启动下一轮。
+
+展示稳定的本轮方案编号（如方案 A）和对应 skill，排名单独列出；不要用“第一个”暗指第一名。记录 run_id、方案 ID 和 skill 快照版本，跨轮引用带轮次，避免匿名编号变化选错。用户满意度与裁判分数分开保存，不能因用户喜欢而改写评分。
+
+执行任何后续操作前读取 [接续任务规则](references/continuation.md)。优化使用所选原稿及对应 skill；重做沿用对应 skill，默认不带被否定的旧答案；下一项任务由一个或多个所选 skill 各自接续自己的成果。每次新建运行、保留原稿与父子关系，不把不同方案偷偷合并。只选一个时直接交付该项及独立质量检查，不伪造多方案排名。

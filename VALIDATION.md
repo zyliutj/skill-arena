@@ -1,5 +1,13 @@
 # 验证记录
 
+## 2026-10-21：选择与接续
+
+- `python -B scripts/test_arena.py`：8 项测试通过。在原有校验之外，覆盖多选接续及分支原件哈希、优化保留原评分标准、重做不继承旧答案、错误选择不创建子轮、拒绝覆盖已有轮次、单方案只做质量检查。
+- `python -X utf8 .../skill-creator/scripts/quick_validate.py .`：通过。
+- 测试只在 data/tmp 的临时目录运行，不向真实历史写入测试结果。未执行新的论文生成试验；本次验证的是交互规则和文件状态辅助逻辑。
+
+## 初版
+
 日期：2026-10-20。
 
 - skill-creator 的 quick_validate.py：通过。Windows 默认 GBK 首次读取 UTF-8 中文失败，使用 `python -X utf8` 后正常，无需修改全局环境。

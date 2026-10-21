@@ -8,6 +8,7 @@ from pathlib import Path
 import random
 import re
 import shutil
+import uuid
 from datetime import datetime, timezone
 
 
@@ -140,7 +141,7 @@ def report(run):
     mapping = read(run / 'mapping.json')
     rows = read(run / 'evaluation' / 'judge.json')['results']
     ids = [r['id'] for r in rows]
-    if len(set(ids)) != len(ids) or set(ids) != set(mapping):
+    if not rows or len(set(ids)) != len(ids) or set(ids) != set(mapping):
         raise ValueError('Judge must cover every anonymous ID exactly once')
     statuses = {'eligible', 'needs-review', 'disqualified', 'failed', 'blocked'}
     for r in rows:
@@ -167,18 +168,22 @@ def report(run):
             if anchor is None or anchor - r['total'] > threshold:
                 rank, anchor = index, r['total']
             r['rank'] = rank
-    lines = ['# Skill 对比报告', '', '评分只适用于本次任务与版本；并列阈值不是统计置信区间。', '']
-    lines += ['| 排名 | 候选 | 状态 | 质量分 |', '|---|---|---|---|']
-    table = '<table><tr><th>排名</th><th>候选</th><th>状态</th><th>质量分</th></tr>'
+    single = len(rows) == 1
+    title = '方案质量检查' if single else 'Skill 对比报告'
+    if single:
+        rows[0]['rank'] = None
+    lines = ['# ' + title, '', '方案编号固定，排名不作为选择编号。评分只适用于本次任务与版本；并列阈值不是统计置信区间。', '']
+    lines += ['| 方案 | 排名 | 候选 | 状态 | 质量分 |', '|---|---|---|---|---|']
+    table = '<table><tr><th>方案</th><th>排名</th><th>候选</th><th>状态</th><th>质量分</th></tr>'
     for r in rows:
-        cells = [str(r['rank'] or '—'), identifier(mapping[r['id']]['id']), r['status'], '—' if r['total'] is None else f"{r['total']:.1f}"]
+        cells = [r['id'], str(r['rank'] or '—'), identifier(mapping[r['id']]['id']), r['status'], '—' if r['total'] is None else f"{r['total']:.1f}"]
         lines.append('| ' + ' | '.join(cells) + ' |')
         table += '<tr>' + ''.join('<td>' + html.escape(c) + '</td>' for c in cells) + '</tr>'
     lines += ['']
     cards = [table + '</table>']
     for r in rows:
         item = mapping[r['id']]
-        heading = f"{r['rank'] or '—'}. {item['id']} ({r['id']}) — {r['status']} — {r['total'] if r['total'] is not None else '未评分'}"
+        heading = f"方案 {r['id']} · {item['id']} — 排名 {r['rank'] or '—'} — {r['status']} — {r['total'] if r['total'] is not None else '未评分'}"
         lines += ['## ' + heading, '']
         card = '<section><h2>' + html.escape(heading) + '</h2>'
         for key in ('summary', 'strengths', 'weaknesses', 'best_for', 'uncertainty'):
@@ -196,16 +201,107 @@ def report(run):
             card += '<p><a href="' + html.escape(p.as_uri(), quote=True) + '">' + html.escape(rel) + '</a></p>'
         lines += ['']
         cards.append(card + '</section>')
+    first = rows[0]['id']
+    next_step = f'有满意的方案吗？可多选。回复“优化 {first}：改进要求”“重做 {first} / 全部重做”，或“满意 {first}，接着做：下一项任务”。也可以说“先保留 {first}”。'
+    lines += ['## 接下来', '', next_step, '']
+    cards.append('<section><h2>接下来</h2><p>' + html.escape(next_step) + '</p></section>')
     (run / 'report.md').write_text('\n'.join(lines), encoding='utf-8')
     (run / 'report.html').write_text('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Skill 对比报告</title><style>body{font:16px/1.7 system-ui;max-width:1100px;margin:32px auto;padding:0 20px;background:#f5f7fa;color:#182539}section{background:white;border:1px solid #dde3ed;border-radius:12px;padding:24px;margin:20px 0}h1,h2{line-height:1.4}a{color:#1258af}p{white-space:pre-wrap}</style><h1>Skill 对比报告</h1><p>仅代表本次任务与版本；并列不是统计显著性结论。</p>' + ''.join(cards) + '</html>', encoding='utf-8')
     write(run / 'ranking.json', {'results': rows})
+    if single:
+        page = (run / 'report.html').read_text(encoding='utf-8').replace('Skill 对比报告', title)
+        (run / 'report.html').write_text(page, encoding='utf-8')
     return rows
+
+
+def resolve_feedback(root, run_id, record):
+    """Resolve an explicit request without writing or changing old results."""
+    run = safe_child(Path(root) / 'runs', identifier(run_id))
+    mode = record.get('mode')
+    if mode not in {'select', 'refine', 'redo', 'continue'}:
+        raise ValueError('Mode must be select, refine, redo, or continue')
+    mapping = read(run / 'mapping.json')
+    available = {identifier(item['id']): item for item in mapping.values()}
+    variants = record.get('variants')
+    if variants is None and mode == 'continue':
+        state = run / 'state.json'
+        variants = read(state).get('selected') if state.exists() else None
+    if variants == 'all' and mode == 'redo':
+        variants = list(available)
+    if (not isinstance(variants, list) or not variants
+            or any(not isinstance(v, str) for v in variants)
+            or len(set(variants)) != len(variants)
+            or any(v not in available for v in variants)):
+        raise ValueError('Specify unique existing variant IDs; all is allowed only for redo')
+    instruction = record.get('instruction', '')
+    if not isinstance(instruction, str):
+        raise ValueError('Instruction must be text')
+    if mode in {'refine', 'continue'} and not instruction.strip():
+        raise ValueError('Refine needs a requested change; continue needs the next task')
+    user_message = record.get('user_message', instruction)
+    if not isinstance(user_message, str):
+        raise ValueError('User message must be text')
+    parents = []
+    for variant in variants:
+        artifacts = []
+        if mode in {'refine', 'continue'}:
+            for rel in available[variant]['artifacts']:
+                p = safe_child(run / 'variants' / variant, rel)
+                if not p.is_file():
+                    raise ValueError('Missing parent artifact: ' + str(p))
+                artifacts.append({'path': p.relative_to(run).as_posix(),
+                                  'sha256': hashlib.sha256(p.read_bytes()).hexdigest()})
+            if not artifacts:
+                raise ValueError('Selected branch has no artifacts')
+        parents.append({'variant_id': variant, 'artifacts': artifacts})
+    return {'run_id': run_id, 'mode': mode, 'variants': variants,
+            'instruction': instruction.strip(), 'user_message': user_message, 'parents': parents}
+
+
+def feedback(root, run_id, record):
+    event = resolve_feedback(root, run_id, record)
+    run = safe_child(Path(root) / 'runs', run_id)
+    event.update(event_id=uuid.uuid4().hex, recorded_at=stamp())
+    write(run / 'feedback' / (event['event_id'] + '.json'), event)
+    state_path = run / 'state.json'
+    state = read(state_path) if state_path.exists() else {'selected': []}
+    state.update(last_event_id=event['event_id'], last_action=event['mode'])
+    if event['mode'] in {'select', 'continue'}:
+        state['selected'] = event['variants']
+    write(state_path, state)
+    return event
+
+
+def followup(root, parent_id, child_id, record):
+    request = resolve_feedback(root, parent_id, record)
+    if request['mode'] == 'select':
+        raise ValueError('Select only records a preference; use feedback, not followup')
+    parent = safe_child(Path(root) / 'runs', parent_id)
+    # Read required inputs before creating anything; invalid requests leave no child.
+    original_task = (parent / 'task.md').read_text(encoding='utf-8')
+    rubric = read(parent / 'rubric.json') if request['mode'] != 'continue' else None
+    child = new_run(root, child_id)
+    event = feedback(root, parent_id, record)
+    write(child / 'lineage.json', {'parent_run_id': parent_id,
+          'feedback_event_id': event['event_id'], 'mode': request['mode'],
+          'variants': request['variants'], 'parents': request['parents'],
+          'instruction': request['instruction'], 'status': 'handoff-required',
+          'inherit_previous_answers': request['mode'] != 'redo'})
+    task = request['instruction'] if request['mode'] == 'continue' else original_task
+    if request['mode'] != 'continue' and request['instruction']:
+        task += '\n\n## User follow-up\n\n' + request['instruction']
+    (child / 'task.md').write_text(task + '\n', encoding='utf-8')
+    if rubric is not None:
+        write(child / 'rubric.json', rubric)
+    (child / 'handoffs').mkdir()
+    # A coordinator must still prepare each skill/context and freeze the new protocol.
+    return child
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
-    for name, args in {'init': ['root'], 'register': ['root', 'record'], 'find': ['root', 'query'], 'new-run': ['root', 'id'], 'snapshot': ['run', 'id', 'source'], 'packet': ['run', 'manifest'], 'report': ['run'], 'remember': ['root', 'record']}.items():
+    for name, args in {'init': ['root'], 'register': ['root', 'record'], 'find': ['root', 'query'], 'new-run': ['root', 'id'], 'snapshot': ['run', 'id', 'source'], 'packet': ['run', 'manifest'], 'report': ['run'], 'remember': ['root', 'record'], 'feedback': ['root', 'run_id', 'record'], 'followup': ['root', 'parent_id', 'child_id', 'record']}.items():
         p = sub.add_parser(name)
         for arg in args:
             p.add_argument(arg)
@@ -216,6 +312,8 @@ def main():
     elif a.command == 'snapshot': snapshot(a.run, a.id, a.source)
     elif a.command == 'packet': packet(a.run, read(a.manifest))
     elif a.command == 'report': report(a.run)
+    elif a.command == 'feedback': print(json.dumps(feedback(a.root, a.run_id, read(a.record)), ensure_ascii=False))
+    elif a.command == 'followup': print(followup(a.root, a.parent_id, a.child_id, read(a.record)))
     elif a.command == 'find':
         query = a.query.casefold().split()
         for s in read(Path(a.root) / 'registry.json')['skills']:
