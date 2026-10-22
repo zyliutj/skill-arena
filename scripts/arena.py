@@ -1,5 +1,6 @@
 """Local storage and report helpers. Standard library only; never calls a model."""
 import argparse
+from report_view import render as render_reader
 import hashlib
 import html
 import json
@@ -309,47 +310,35 @@ def report(run):
     title = '方案质量检查' if single else 'Skill 对比报告'
     if single:
         rows[0]['rank'] = None
-    overview_lines, overview_html = candidate_overview(run, mapping)
+    overview_lines, _ = candidate_overview(run, mapping)
     lines = ['# ' + title, '', '方案编号固定，排名不作为选择编号。评分只适用于本次任务与版本；并列阈值不是统计置信区间。', ''] + overview_lines
     lines += ['| 方案 | 排名 | 候选 | 状态 | 质量分 |', '|---|---|---|---|---|']
-    table = '<table><tr><th>方案</th><th>排名</th><th>候选</th><th>状态</th><th>质量分</th></tr>'
     for r in rows:
         cells = [candidate_label(mapping[r['id']]) + '（编号 ' + r['id'] + '）', str(r['rank'] or '—'), identifier(mapping[r['id']]['id']), r['status'], '—' if r['total'] is None else f"{r['total']:.1f}"]
         lines.append('| ' + ' | '.join(cells) + ' |')
-        table += '<tr>' + ''.join('<td>' + html.escape(c) + '</td>' for c in cells) + '</tr>'
     lines += ['']
-    cards = [overview_html, table + '</table>']
     for r in rows:
         item = mapping[r['id']]
         heading = f"{candidate_label(item)}（编号 {r['id']}）— 排名 {r['rank'] or '—'} — {r['status']} — {r['total'] if r['total'] is not None else '未评分'}"
         lines += ['## ' + heading, '']
-        card = '<section><h2>' + html.escape(heading) + '</h2>'
         for key in ('summary', 'strengths', 'weaknesses', 'best_for', 'uncertainty'):
             lines += [f"**{key}**：{r[key]}", '']
-            card += '<p><b>' + key + '</b>: ' + html.escape(r[key]) + '</p>'
         for key, d in r.get('dimensions', {}).items():
             text = f"{key}: {d['score']}/5 — {d['evidence']}"
             lines += ['- ' + text]
-            card += '<p>' + html.escape(text) + '</p>'
         for rel in item['artifacts']:
             p = safe_child(run / 'variants' / identifier(item['id']), rel)
             if not p.is_file():
                 raise ValueError('Original artifact missing')
             lines += [f'- [{rel}](<{p.as_uri()}>)']
-            card += '<p><a href="' + html.escape(p.as_uri(), quote=True) + '">' + html.escape(rel) + '</a></p>'
         lines += ['']
-        cards.append(card + '</section>')
     first = candidate_label(mapping[rows[0]['id']])
     next_step = f'回到会话即可选择优化、重做、继续下一步或调整候选，并输入具体要求。也可直接说“优化 {first}：改进要求”或“先保留 {first}”。都不满意时，可增加两款新 skill，并选择移除指定候选或评分最低的两款；历史结果保留。'
     lines += ['## 接下来', '', next_step, '']
-    cards.append('<section><h2>接下来</h2><p>' + html.escape(next_step) + '</p></section>')
     (run / 'report.md').write_text('\n'.join(lines), encoding='utf-8')
-    (run / 'report.html').write_text('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Skill 对比报告</title><style>body{font:16px/1.7 system-ui;max-width:1100px;margin:32px auto;padding:0 20px;background:#f5f7fa;color:#182539}section{background:white;border:1px solid #dde3ed;border-radius:12px;padding:24px;margin:20px 0}h1,h2{line-height:1.4}a{color:#1258af}p{white-space:pre-wrap}</style><h1>Skill 对比报告</h1><p>仅代表本次任务与版本；并列不是统计显著性结论。</p>' + ''.join(cards) + '</html>', encoding='utf-8')
+    (run / 'report.html').write_text(render_reader(run, mapping, rows, title, safe_child, next_step), encoding='utf-8')
     write(run / 'ranking.json', {'results': rows})
     interaction(run, rows, mapping)
-    if single:
-        page = (run / 'report.html').read_text(encoding='utf-8').replace('Skill 对比报告', title)
-        (run / 'report.html').write_text(page, encoding='utf-8')
     return rows
 
 

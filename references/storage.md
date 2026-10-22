@@ -93,6 +93,6 @@ report 会输出 interaction.json。action、selection、adjustment 可作为可
 
 新增可选字段 candidate_type（skill/toolkit）、repository、entrypoint、modules_allowed、modules_used、stars_status、stars、stars_checked_at、scores、score_evidence、reason、limitations。字段含义和五维权重见 discovery.md。register 在有 scores 时校验并保存 selection_priority；缺少新字段的旧记录仍可读取。GitHub stars 未获取是 unknown，非GitHub为 not_applicable，两者都不冒充零星。
 
-将本轮已选记录复制到 variants manifest，或在 run/discovery.json 的 candidates 中以 skill_id/id 对应。packet 只将 artifacts 中的交付物复制给裁判；不把 discovery、来源、stars或选型分放进匿名包。report 从本轮元数据生成首页，并从各 execution.json 读取实际 modules_used；没有记录明确显示缺失。snapshot 使用候选入口为根，工具包需将必需模块和共享资源物化到同一根后再固定，不能漏掉根外引用。实际入口不是根SKILL.md时，保留原结构并写来源清单，选择官方适配入口；不凭空重写其方法。
+将本轮已选记录复制到 variants manifest，或在 run/discovery.json 的 candidates 中以 skill_id/id 对应。packet 只将 artifacts 中的交付物复制给裁判；不把 discovery、来源、stars或选型分放进匿名包。report 将完整结果嵌入单文件 HTML；简介只展示四项信息，实际 modules_used 等运行记录折叠在末尾。可用 presentation.json 补充已核验的展示信息与阅读图示，详见 [报告展示规则](reporting.md)；没有记录明确显示缺失。snapshot 使用候选入口为根，工具包需将必需模块和共享资源物化到同一根后再固定，不能漏掉根外引用。实际入口不是根SKILL.md时，保留原结构并写来源清单，选择官方适配入口；不凭空重写其方法。
 
 报告的来源URL仅接受http/https，快照和执行文件链接从本轮真实文件生成。历史报告不自动重建，不改变旧排名或把补充候选混进旧轮。

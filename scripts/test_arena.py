@@ -38,7 +38,9 @@ class ArenaTest(unittest.TestCase):
         self.assertIn('planning', page)
         self.assertIn('99999', page)
         self.assertIn('未记录', page)
-        self.assertNotIn('<script>', page)
+        self.assertEqual(page.count('<script>'), 1)
+        self.assertNotIn('<script>alert', page)
+        self.assertNotIn('<script>test', page)
         self.assertFalse(any(p.name in {'discovery.json', 'execution.json'} for p in (self.run / 'judge-packet').rglob('*')))
 
     def setUp(self):
@@ -75,8 +77,33 @@ class ArenaTest(unittest.TestCase):
         self.assertEqual(rows[0]['total'], 80)
         page = (self.run / 'report.html').read_text(encoding='utf-8')
         self.assertIn('&lt;script&gt;', page)
-        self.assertNotIn('<script>', page)
-        self.assertIn('file:', page)
+        self.assertEqual(page.count('<script>'), 1)
+        self.assertNotIn('<script>alert', page)
+        self.assertNotIn('<script>test', page)
+        self.assertIn('data:application/octet-stream;base64,', page)
+        self.assertIn('synthetic &lt;script&gt;alert(1)', page)
+
+    def test_reader_complete_contents_order_and_sidecar(self):
+        self.fixture()
+        before = arena.report(self.run)
+        original = '# Title\n## Main\n- Item\n\n| Field | Value |\n|---|---|\n| End | FULL-END-MARKER |\n[jump](javascript:alert)'
+        answer = self.run / 'variants' / 'one' / 'answer.md'
+        answer.write_text(original, encoding='utf-8')
+        arena.write(self.run / 'presentation.json', {'candidates': {'one': {
+            'metadata': {'description': 'Simple description', 'project_updated_at': '2026-10-22'},
+            'diagrams': [{'title': 'Flow', 'steps': ['Read', 'Plan'], 'source': 'answer.md Main'}]}}})
+        self.assertEqual(before, arena.report(self.run))
+        page = (self.run / 'report.html').read_text(encoding='utf-8')
+        self.assertIn('FULL-END-MARKER', page)
+        self.assertIn('<ul><li>Item</li></ul>', page)
+        self.assertIn('<thead>', page)
+        self.assertIn('Simple description', page)
+        self.assertIn('answer.md Main', page)
+        self.assertNotIn('href="javascript:', page)
+        self.assertNotIn('<script src=', page)
+        self.assertLess(page.index('id="candidate-one"'), page.index('id="evaluation"'))
+        self.assertIn('data-toggle="close"', page)
+        self.assertEqual(answer.read_text(encoding='utf-8'), original)
 
     def test_omission_and_invalid_scores(self):
         rows = self.fixture()
