@@ -10,6 +10,28 @@ spec.loader.exec_module(arena)
 
 
 class ArenaTest(unittest.TestCase):
+    def test_stars_gate_boundary_and_user_exception(self):
+        record = {'id': 'candidate', 'status': 'selected', 'source': 'https://github.com/example/repo',
+                  'stars_status': 'known', 'stars': 9, 'stars_checked_at': '2026-10-23'}
+        self.assertFalse(arena.selection_gate(record)['eligible'])
+        path = self.root / 'discovery.json'
+        arena.write(path, {'candidates': [record]})
+        with self.assertRaises(ValueError): arena.check_selection(path)
+        record['stars'] = 10
+        self.assertTrue(arena.selection_gate(record)['eligible'])
+        record.update(stars=0, user_specified=True, user_specified_evidence='User explicitly requested this project')
+        arena.write(path, {'candidates': [record]})
+        self.assertEqual(arena.check_selection(path)['status'], 'passed')
+        record.pop('user_specified_evidence')
+        with self.assertRaises(ValueError): arena.selection_gate(record)
+
+    def test_stars_gate_unknown_and_not_applicable(self):
+        self.assertFalse(arena.selection_gate({'stars_status': 'unknown'})['eligible'])
+        self.assertTrue(arena.selection_gate({'stars_status': 'not_applicable', 'source': 'local'})['eligible'])
+        self.assertFalse(arena.selection_gate({'stars_status': 'not_applicable', 'source': 'https://github.com/example/repo'})['eligible'])
+        self.assertTrue(arena.selection_gate({'stars_status': 'unknown', 'user_specified': True,
+                         'user_specified_evidence': 'Explicit continuation request'})['eligible'])
+
     def test_selection_priority_missing_and_log_stars(self):
         record = {'scores': {k: 4 for k in ('task_fit', 'workflow', 'compatibility', 'maintenance')}}
         self.assertEqual(arena.selection_priority(record)['total'], 80)

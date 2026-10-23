@@ -8,6 +8,14 @@
 
 覆盖目标完成，且适配候选已核对工作流、依赖和许可后停止；若搜索趋于重复、访问阻塞或确实稀缺，也可停止并说明。不要承诺穷尽生态。历史优胜者不自动占位，尽量保留一个高度匹配的新项目。先展示候选表再自动执行，不新增常规审批。
 
+## stars 硬门槛
+
+- 除用户明确指定的 skill／工具包外，GitHub 仓库 stars 少于 10（0–9）的项目不得纳入执行候选；恰好 10 可以继续审查。高任务匹配分、多样性或候选不足均不能豁免，不足时如实说明。
+- 用户明确点名考察、使用或接续的候选可豁免此门槛，记录 `user_specified: true` 和 `user_specified_evidence`（用户请求原文或可追溯引用）。协调者自行推荐、历史曾用或历史胜出不等于用户指定。例外只免星数门槛，不免模型、权限、依赖和任务适配要求。
+- stars 无法核实时标记 pending_review，先核实，不能作为非指定 GitHub 候选执行。非 GitHub 且确实无 stars 指标的来源保留 not_applicable，不当成 0；不得给 GitHub 项目标成不适用以绕过规则。
+- 对 skill 与 toolkit 一致应用，以实际来源仓库的当前核验 stars 为准。低星发现记录可留在调查中，标记 excluded 及理由；不能伪称它参与了执行。
+- 新执行前运行 `python scripts/arena.py check-selection RUN/discovery.json` 检查 selected 项。历史结果与评分保持不变；重新自动选型、增加候选时应用新门槛，明确接续所选方案按用户指定记录例外。
+
 ## 入选优先级（不等于结果质量）
 
 | 维度 | 权重 | 核验内容 |
@@ -20,9 +28,9 @@
 
 前四个非stars维度由协调者按0–5评分并逐项给证据。stars分为 `min(5, log10(1 + stars))`，例如约10/100/1000/10000/100000 stars对应1/2/3/4/5分。这是透明的启发式，不是有效性概率。
 
-GitHub仓库总stars不能写成某个子skill独立获得的认可；共用仓库应展示同一repo标识。非GitHub来源stars_status=not_applicable，其他85%权重重新归一。GitHub读取失败为unknown，必须保留缺失标记：可给其余维度暂定分，但不能假装零星或完成热度比较。取得实际star值才用known。star值不能靠记忆填。
+GitHub仓库总stars不能写成某个子skill独立获得的认可；共用仓库应展示同一repo标识。非GitHub来源stars_status=not_applicable，其他85%权重重新归一。GitHub读取失败为unknown，必须保留缺失标记：可给其余维度暂定分用于调查，但未核实门槛前不能自动入选，也不能假装零星或完成热度比较。取得实际star值才用known。star值不能靠记忆填。
 
-资格先于分数：模型无法统一、关键资源缺失或任务不匹配，不能靠高star补偿。综合分只辅助选型，允许基于适配性、多样性和新项目价值调整，但记录原因。产物裁判不得看到这些分数或stars，也不把它们加入质量rubric。
+资格先于分数：模型无法统一、关键资源缺失或任务不匹配，不能靠高star补偿。综合分只辅助选型，仅在通过硬门槛的候选之间允许基于适配性、多样性和新项目价值调整，并记录原因。产物裁判不得看到这些分数或stars，也不把它们加入质量rubric。
 
 ## 文件与状态
 
@@ -30,7 +38,7 @@ GitHub仓库总stars不能写成某个子skill独立获得的认可；共用仓�
 
 ```json
 {"queries": ["任务词"], "searched_at": "YYYY-MM-DD", "stop_reason": "实际理由", "candidates": [
-  {"id": "example", "name": "Example", "source": "https://github.com/owner/repo", "repository": "owner/repo", "version": "commit", "candidate_type": "toolkit", "entrypoint": "SKILL.md", "modules_allowed": ["planning"], "modules_used": [], "stars_status": "known", "stars": 1234, "stars_checked_at": "YYYY-MM-DD", "scores": {"task_fit": 4, "workflow": 4, "compatibility": 5, "maintenance": 4}, "score_evidence": {"task_fit": "证据", "workflow": "证据", "compatibility": "证据", "maintenance": "证据"}, "status": "selected", "reason": "实际入选理由", "limitations": "实际局限"}
+  {"id": "example", "name": "Example", "source": "https://github.com/owner/repo", "repository": "owner/repo", "version": "commit", "candidate_type": "toolkit", "entrypoint": "SKILL.md", "modules_allowed": ["planning"], "modules_used": [], "user_specified": false, "stars_status": "known", "stars": 1234, "stars_checked_at": "YYYY-MM-DD", "scores": {"task_fit": 4, "workflow": 4, "compatibility": 5, "maintenance": 4}, "score_evidence": {"task_fit": "证据", "workflow": "证据", "compatibility": "证据", "maintenance": "证据"}, "status": "selected", "reason": "实际入选理由", "limitations": "实际局限"}
 ]}
 ```
 

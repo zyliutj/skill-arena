@@ -67,6 +67,43 @@ def register(root, record):
     write(Path(root) / 'registry.json', db)
 
 
+def selection_gate(record):
+    """Stars eligibility for new selections; never re-rank historical outputs."""
+    state = record.get('stars_status', 'unknown')
+    if state not in {'known', 'unknown', 'not_applicable'}:
+        raise ValueError('Invalid stars status')
+    specified = record.get('user_specified', False)
+    if type(specified) is not bool:
+        raise ValueError('user_specified must be boolean')
+    if specified and not str(record.get('user_specified_evidence', '')).strip():
+        raise ValueError('User exception requires an explicit request reference')
+    if state == 'known':
+        stars = record.get('stars')
+        if type(stars) is not int or stars < 0 or not record.get('stars_checked_at'):
+            raise ValueError('Known stars require nonnegative integer and check date')
+    if record.get('kind') == 'baseline':
+        return {'eligible': True, 'reason': 'baseline'}
+    if specified:
+        return {'eligible': True, 'reason': 'user-specified exception'}
+    if state == 'known':
+        return {'eligible': stars >= 10, 'reason': 'stars >= 10' if stars >= 10 else 'stars < 10'}
+    github = str(record.get('source', '')).startswith(('https://github.com/', 'http://github.com/')) or bool(record.get('repository'))
+    if state == 'not_applicable' and not github:
+        return {'eligible': True, 'reason': 'stars not applicable'}
+    return {'eligible': False, 'reason': 'stars pending verification'}
+
+
+def check_selection(path):
+    candidates = read(path)['candidates']
+    failures = []
+    for record in candidates:
+        if record.get('status') == 'selected':
+            gate = selection_gate(record)
+            if not gate['eligible']: failures.append(str(record['id']) + ': ' + gate['reason'])
+    if failures: raise ValueError('Selection blocked: ' + '; '.join(failures))
+    return {'status': 'passed'}
+
+
 def selection_priority(record):
     """Selection heuristic only. Never used for judging output quality."""
     weights = {'task_fit': 35, 'workflow': 25, 'compatibility': 15, 'maintenance': 10}
@@ -89,7 +126,7 @@ def selection_priority(record):
     else:
         total = total * 100 / 85
     return {'total': round(total, 2), 'star_score': star_score,
-            'provisional': state == 'unknown', 'stars_status': state}
+            'provisional': state == 'unknown', 'stars_status': state, 'eligibility': selection_gate(record)}
 
 
 def candidate_overview(run, mapping):
@@ -450,12 +487,13 @@ def followup(root, parent_id, child_id, record):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
-    for name, args in {'init': ['root'], 'register': ['root', 'record'], 'find': ['root', 'query'], 'new-run': ['root', 'id'], 'snapshot': ['run', 'id', 'source'], 'packet': ['run', 'manifest'], 'report': ['run'], 'remember': ['root', 'record'], 'feedback': ['root', 'run_id', 'record'], 'followup': ['root', 'parent_id', 'child_id', 'record']}.items():
+    for name, args in {'check-selection': ['record'], 'init': ['root'], 'register': ['root', 'record'], 'find': ['root', 'query'], 'new-run': ['root', 'id'], 'snapshot': ['run', 'id', 'source'], 'packet': ['run', 'manifest'], 'report': ['run'], 'remember': ['root', 'record'], 'feedback': ['root', 'run_id', 'record'], 'followup': ['root', 'parent_id', 'child_id', 'record']}.items():
         p = sub.add_parser(name)
         for arg in args:
             p.add_argument(arg)
     a = parser.parse_args()
-    if a.command == 'init': init(a.root)
+    if a.command == 'check-selection': print(json.dumps(check_selection(a.record), ensure_ascii=False))
+    elif a.command == 'init': init(a.root)
     elif a.command == 'register': register(a.root, read(a.record))
     elif a.command == 'new-run': print(new_run(a.root, a.id))
     elif a.command == 'snapshot': snapshot(a.run, a.id, a.source)
