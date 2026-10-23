@@ -112,7 +112,8 @@ def render(run, mapping, rows, title, safe_child, next_step, delivery=None):
             label = '完整方案' if body else '参考资料' if rel == 'sources.md' else rel
             entry = next((x for x in (delivery or {}).get('artifacts', []) if x['path'] == 'variants/'+ident+'/'+rel), None)
             if entry and not entry['included']:
-                content = '<p>大附件按需传输 · '+str(entry['bytes'])+' 字节 · 尚未同步</p><p>远程位置：'+E(delivery['source_host']+' : '+entry['source_path'])+'</p>'
+                content = artifact(path) if path.suffix.lower() in {'.md', '.txt'} else ''
+                content += '<p>原始文件按需下载 · '+str(entry['bytes'])+' 字节 · 尚未同步</p><p>远程位置：'+E(delivery['source_host']+' : '+entry['source_path'])+'</p>'
             elif delivery:
                 content = artifact(path) if path.suffix.lower() in {'.md','.txt','.json','.csv','.py','.png','.jpg','.jpeg','.gif','.webp'} else '<p>附件随交付包提供。</p>'
                 content += '<p><a download href="'+E('variants/'+ident+'/'+rel,quote=True)+'">下载原始文件</a> · 随包传输，完成状态见 delivery-receipt.json</p>'
@@ -144,7 +145,7 @@ def render(run, mapping, rows, title, safe_child, next_step, delivery=None):
         for p in [run/'variants'/item['id']/'execution.json',run/'snapshots'/(item.get('skill_id') or item['id'])/'SKILL.md']:
             if p.exists(): records += '<details><summary>'+E(item['id']+' / '+p.name)+'</summary><div>'+artifact(p)+'</div></details>'
     records += '</div></details>'
-    if delivery: records = '<p class="muted">报告优先交付；完整运行记录保留在执行主机。大附件位置见各方案，传输完成情况以本地回执为准。</p>'
+    if delivery: records = '<p class="muted">最终报告优先交付；其他原始文件及运行记录保留在执行主机，需要时可按各方案列出的位置下载。传输完成情况以本地回执为准。</p>'
     brief = presentation.get('task_summary','本页收录各候选的完整产物。先阅读方案，再查看末尾评估。')
     task = '<details><summary>查看完整任务要求</summary><div>'+artifact(run/'task.md')+'</div></details>'
     return '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+E(title)+'</title><style>'+CSS+'</style></head><body><main><header><span class="eyebrow">SKILL ARENA / READER</span><h1>'+E(title)+'</h1><p>'+E(brief)+'</p></header><nav><button data-toggle="open">全部展开</button><button data-toggle="close">全部收起</button>'+''.join(nav)+'<a href="#evaluation">查看评估</a></nav>'+task+''.join(sections)+assessment+'<p>'+E(next_step)+'</p>'+records+'</main><script>'+JS+'</script></body></html>'

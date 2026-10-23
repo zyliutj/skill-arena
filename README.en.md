@@ -86,8 +86,8 @@ Close scores may tie. Uncertainty is disclosed. A better result in one task does
 
 Skill Arena checks where it is running and prefers delivering final results to your computer:
 
-- **A verified local mount is accessible:** save final deliverables there directly.
-- **An existing transfer channel is available:** send the full text report first, then small attachments; fetch large attachments on demand.
+- **Deliver the final report locally first:** the skill chooses the available, authorized channel expected to finish fastest, based on connection state and file size.
+- **Download other files on demand:** the report lists their remote locations; attachments are not transferred automatically.
 - **Your computer is not reachable:** keep the remote files and explain their location and the limitation.
 
 Provide your local destination once; it is remembered per client computer. Intermediate files stay remote. Matching files are verified and skipped on retries.

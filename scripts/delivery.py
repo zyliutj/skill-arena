@@ -76,10 +76,10 @@ def export(run, output, full=False):
         for rel in item['artifacts']:
             p = child(run, 'variants/' + item['id'] + '/' + rel)
             size = p.stat().st_size
-            # Narrative remains complete even when long; large data is optional.
-            include = full or p.suffix.lower() in TEXT or size <= LIMIT
+            # Original files are opt-in; narrative is rendered inside the report.
+            include = full
             artifacts.append({'path': 'variants/' + item['id'] + '/' + rel.replace('\\','/'), 'bytes': size,
-                              'sha256': digest(p), 'included': include,
+                              'sha256': digest(p) if include else None, 'included': include,
                               'source_path': str(p), 'status': 'bundled' if include else 'remote-only'})
     output.mkdir(parents=True)
     for item in artifacts:
@@ -87,7 +87,7 @@ def export(run, output, full=False):
             dest = child(output, item['path']); dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(child(run, item['path']), dest)
     manifest = {'schema': 1, 'source_host': socket.gethostname(), 'source_run': str(run),
-                'mode': 'full' if full else 'report-first', 'artifacts': artifacts}
+                'mode': 'full' if full else 'report-only', 'artifacts': artifacts}
     title = '方案质量检查' if len(mapping) == 1 else 'Skill 对比报告'
     page = render(run, mapping, ranking['results'], title, child,
                   '回到会话选择优化、重做、接续或调整候选。', delivery=manifest)

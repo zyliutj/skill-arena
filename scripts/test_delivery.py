@@ -41,9 +41,11 @@ class DeliveryTest(unittest.TestCase):
         self.assertIn('END-OF-NARRATIVE',page)
         self.assertIn('尚未同步',page)
         self.assertLess((self.bundle/'report.html').stat().st_size,100000)
-        self.assertEqual([x['included'] for x in result['artifacts']],[True,False])
+        self.assertEqual([x['included'] for x in result['artifacts']],[False,False])
         self.assertFalse((self.bundle/'variants'/'sample'/'large.bin').exists())
         self.assertFalse((self.bundle/'snapshots').exists())
+        self.assertEqual([x['path'] for x in result['files']], ['report.html'])
+        self.assertNotIn('href="variants/', page)
         self.assertEqual(before,delivery.digest(self.run/'variants'/'sample'/'answer.md'))
         full=delivery.export(self.run,self.root/'full',full=True)
         self.assertTrue(all(x['included'] for x in full['artifacts']))
@@ -73,7 +75,7 @@ class DeliveryTest(unittest.TestCase):
         with self.assertRaises(ValueError): delivery.child(self.root,'../escape')
 
     def test_pull_report_arrives_before_attachments(self):
-        delivery.export(self.run,self.bundle)
+        delivery.export(self.run,self.bundle,full=True)
         calls=[]
         def transfer(args,**kwargs):
             self.assertIn('StrictHostKeyChecking=yes',args[5])
@@ -88,6 +90,18 @@ class DeliveryTest(unittest.TestCase):
         self.assertEqual(result['status'],'verified')
         self.assertEqual(delivery.read(self.dest/'delivery-progress.json')['status'],'verified')
 
+    def test_default_pull_fetches_only_report_and_control_manifest(self):
+        delivery.export(self.run,self.bundle)
+        calls=[]
+        def transfer(args,**kwargs):
+            rel=args[-2].split('/bundle/',1)[1]; calls.append(rel)
+            shutil.copyfile(self.bundle/rel,Path(args[-1]))
+        with patch('delivery.POSIX_CLIENT',True), patch('delivery.shutil.which',return_value='/usr/bin/rsync'), patch('delivery.subprocess.run',side_effect=transfer):
+            receipt=delivery.pull('server','/bundle',self.dest)
+        self.assertEqual(calls,['delivery.json','report.html'])
+        self.assertEqual(receipt['copied'] + receipt['skipped'], ['report.html'])
+        self.assertFalse((self.dest/'variants').exists())
+
     def test_preferences_separate_clients(self):
         delivery.configure(self.root,'laptop','D:/Research')
         delivery.configure(self.root,'desktop','/home/user/results')
@@ -97,7 +111,7 @@ class DeliveryTest(unittest.TestCase):
         with self.assertRaises(ValueError): delivery.configure(self.root,'bad','relative')
 
     def test_pull_interruption_retains_report_and_retries(self):
-        delivery.export(self.run,self.bundle)
+        delivery.export(self.run,self.bundle,full=True)
         fail=[True]
         def transfer(args,**kwargs):
             rel=args[-2].split('/bundle/',1)[1]
