@@ -102,6 +102,30 @@ class DeliveryTest(unittest.TestCase):
         self.assertEqual(receipt['copied'] + receipt['skipped'], ['report.html'])
         self.assertFalse((self.dest/'variants').exists())
 
+    def test_local_verification_requires_actual_client(self):
+        manifest=delivery.export(self.run,self.bundle)
+        delivery.sync(self.bundle,self.dest)
+        sha=manifest['files'][0]['sha256']
+        with patch('delivery.socket.gethostname',return_value='remote-server'):
+            with self.assertRaises(ValueError): delivery.verify_local(self.dest,sha,'user-laptop')
+        self.assertEqual(delivery.read(self.dest/'local-verification.json')['status'],'failed')
+        with patch('delivery.socket.gethostname',return_value='user-laptop'):
+            proof=delivery.verify_local(self.dest,sha,'user-laptop')
+        self.assertEqual(proof['status'],'local-verified')
+        self.assertEqual(proof['sha256'],sha)
+
+    def test_local_verification_rechecks_modified_or_missing_report(self):
+        manifest=delivery.export(self.run,self.bundle)
+        delivery.sync(self.bundle,self.dest)
+        sha=manifest['files'][0]['sha256']; host=delivery.socket.gethostname()
+        delivery.verify_local(self.dest,sha,host)
+        (self.dest/'report.html').write_text('stale or changed report',encoding='utf-8')
+        with self.assertRaises(ValueError): delivery.verify_local(self.dest,sha,host)
+        self.assertEqual(delivery.read(self.dest/'local-verification.json')['status'],'failed')
+        (self.dest/'report.html').unlink()
+        with self.assertRaises(ValueError): delivery.verify_local(self.dest,sha,host)
+        self.assertEqual(delivery.read(self.dest/'local-verification.json')['status'],'failed')
+
     def test_preferences_separate_clients(self):
         delivery.configure(self.root,'laptop','D:/Research')
         delivery.configure(self.root,'desktop','/home/user/results')

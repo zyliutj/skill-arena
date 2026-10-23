@@ -9,6 +9,7 @@ import shutil
 import socket
 import subprocess
 import tempfile
+from datetime import datetime, timezone
 from report_view import render
 
 TEXT = {'.md', '.txt'}
@@ -129,7 +130,7 @@ def sync(bundle, target):
             temp.unlink(missing_ok=True)
         copied.append(entry['path'])
     write(target/'delivery.json', manifest)
-    receipt = {'status':'verified', 'target':str(target), 'copied':copied, 'skipped':skipped,
+    receipt = {'status':'verified', 'scope':'transfer-destination-only', 'target':str(target), 'copied':copied, 'skipped':skipped,
                'files':manifest['files'], 'source_host':manifest['source_host']}
     write(target/'delivery-receipt.json', receipt)
     return receipt
@@ -185,6 +186,33 @@ def pull(host, remote_bundle, target):
     return result
 
 
+def verify_local(target, expected_sha256, expected_client_host):
+    """Run on the confirmed LOCAL client immediately before declaring completion."""
+    target = destination(str(target))
+    proof = {'status': 'failed', 'scope': 'local-report', 'target': str(target),
+             'receiver_host': socket.gethostname(),
+             'checked_at': datetime.now(timezone.utc).isoformat()}
+    try:
+        if not expected_client_host or socket.gethostname().casefold() != expected_client_host.casefold():
+            raise ValueError('Not running on the expected client host')
+        if not re.fullmatch(r'[0-9a-fA-F]{64}', expected_sha256):
+            raise ValueError('Expected SHA256 must come from the final source report')
+        report = child(target, 'report.html')
+        if not report.is_file() or report.stat().st_size == 0:
+            raise ValueError('Local report is missing or empty')
+        actual = digest(report)
+        if actual != expected_sha256.lower():
+            raise ValueError('Local report does not match the final source report')
+        proof.update(status='local-verified', report=str(report), bytes=report.stat().st_size,
+                     sha256=actual)
+    except (OSError, ValueError) as error:
+        proof['reason'] = str(error)
+        if target.is_dir(): write(target/'local-verification.json', proof)
+        raise
+    write(target/'local-verification.json', proof)
+    return proof
+
+
 def configure(root, client, local_root, mount=None):
     if not client.strip(): raise ValueError('Client identity is required')
     if not (PurePosixPath(local_root).is_absolute() or PureWindowsPath(local_root).is_absolute()):
@@ -204,10 +232,12 @@ def main():
     s=sub.add_parser('sync'); s.add_argument('bundle'); s.add_argument('target')
     r=sub.add_parser('pull'); r.add_argument('host'); r.add_argument('remote_bundle'); r.add_argument('target')
     c=sub.add_parser('configure'); c.add_argument('root'); c.add_argument('client'); c.add_argument('local_root'); c.add_argument('--mount')
+    v=sub.add_parser('verify-local'); v.add_argument('target'); v.add_argument('expected_sha256'); v.add_argument('expected_client_host')
     a=p.parse_args()
     if a.cmd=='detect': result=detect(a.context)
     elif a.cmd=='export': result=export(a.run,a.output,a.full)
     elif a.cmd=='sync': result=sync(a.bundle,a.target)
+    elif a.cmd=='verify-local': result=verify_local(a.target,a.expected_sha256,a.expected_client_host)
     elif a.cmd=='configure': result=configure(a.root,a.client,a.local_root,a.mount)
     else: result=pull(a.host,a.remote_bundle,a.target)
     print(json.dumps(result,ensure_ascii=False,indent=2))

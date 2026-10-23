@@ -92,6 +92,8 @@ Skill Arena checks where it is running and prefers delivering final results to y
 - **Download other files on demand:** the report lists their remote locations; attachments are not transferred automatically.
 - **Your computer is not reachable:** keep the remote files and explain their location and the limitation.
 
+**Delivery is complete only after the report is read and checksum-verified on your computer.** If it has not arrived, the skill tries available channels or explains the blocker; a remote path alone is not completion.
+
 Provide your local destination once; it is remembered per client computer. Intermediate files stay remote. Matching files are verified and skipped on retries.
 
 > Use $skill-arena on the remote server to plan my paper. Save the final results to D:\Research on my computer.
