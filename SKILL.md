@@ -18,6 +18,8 @@ description: Discover and compare skills through independent task solutions and 
 
 用户只需提供任务需求，输入材料可选。根据需求确定目标、受众、输出格式、约束与偏好，未指定的次要细节采用合理默认值并记录。没有材料时自行检索公开来源，不把上传材料作为启动条件；只有任务必须依赖用户私有数据且无法合理替代时，才询问缺失信息。论文规划是规划任务，不擅自升级为全文或捏造实验。读取 [评估规范](references/evaluation.md)，在看到候选结果前冻结任务与评分维度、权重和硬性条件。
 
+开始时读取 [运行位置与本地交付](references/delivery.md)，结合主机上下文和 SSH 证据判断运行位置，并读取按客户端保存的交付目录偏好。远程执行优先将最终成果导出到已验证的本地挂载目录，否则通过现有授权通道自动同步；未知或不可达时如实保留远程结果并提示，不把服务器路径误报为本地。
+
 确定一个持久数据根目录：优先沿用此前目录，否则使用用户工作目录下 `skill-arena-data`。不要将运行数据写入安装后的 skill 包。以 `scripts/arena.py init DATA_ROOT` 建库；脚本只负责文件与汇总，不会启动模型。所有临时下载、测试及缓存放 DATA_ROOT/tmp。使用 [提示词模板](references/prompts.md) 调度。
 
 ## 2. 调查和记录候选
@@ -46,6 +48,8 @@ description: Discover and compare skills through independent task solutions and 
 
 按评估规范独立核验，输出 judge.json；读取 [报告展示规则](references/reporting.md)，用 `report` 检查分数并生成单文件 report.html 和 Markdown 索引。所有候选的完整产物嵌入同一 HTML，不能只放摘要或外链。各候选简介仅含项目来源、stars、简介和最新更新时间，正文支持展开收起，排名与逐维评价放在所有方案之后。详细选型理由、版本、模块、快照及运行局限收纳到最后的折叠记录。协调者检查覆盖、引用和算术后解盲；必须保留失败状态和不确定性。费用不混入质量分。新增阅读图示注明原文依据，不改写冻结原稿或原评分。
 
+
+远程结果按 [交付规则](references/delivery.md) 导出报告优先包：完整文字正文先到本地，大附件按需；交付后检查回执和哈希，再给用户本地链接。
 
 把每次实际运行证据追加到 history.jsonl，保留版本、任务标签、环境、状态、报告路径及用户后续偏好。由协调者单写 registry/history，避免并发覆盖。测试和模拟分数不得写入真实历史。未来复用仍复核来源可用性与版本。
 

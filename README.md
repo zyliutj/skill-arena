@@ -1,3 +1,5 @@
+<p align="center"><strong>中文</strong> · <a href="README.en.md">English →</a></p>
+
 <p align="center">
   <img src="assets/skill-arena-banner.png" alt="Skill Arena：用户提出任务，多个 skill 分别生成方案，独立评估给出排名和理由，再由用户查看、选择与反馈" width="100%">
 </p>
@@ -80,6 +82,20 @@
 
 评分接近时可以并列；证据不足时会说明原因。一次结果更好，不代表这款 skill 在所有任务中都更好。
 
+## 在远程服务器上运行怎么办？
+
+Skill Arena 会识别运行位置，并优先把最终成果交付到你的电脑：
+
+- **能访问本地映射目录**：直接保存最终成果。
+- **已有传输通道**：先传完整文字报告，再传小附件；大附件按需获取。
+- **暂时无法连接本地**：保留远程文件，并告诉你位置和原因。
+
+第一次说明本地保存目录，以后在同一台电脑上复用。中间文件留在远程，已传文件通过校验后跳过。
+
+> 在远程服务器使用 $skill-arena，帮我规划论文，最终结果保存到我的电脑 D:\Research。
+
+自动传输需要已有可用的挂载、文件连接器或 SSH 通道；仅提供本地路径不会让服务器自动获得访问能力。
+
 <details>
 <summary><strong>想了解具体规则？</strong></summary>
 
@@ -88,6 +104,7 @@
 - [候选筛选依据](references/discovery.md)
 - [报告展示规则](references/reporting.md)
 - [评价方法](references/evaluation.md)
+- [远程运行与本地交付](references/delivery.md)
 - [文件与记录管理](references/storage.md)
 - [优化与接续规则](references/continuation.md)
 - [研究参考与设计考虑](references/research.md)

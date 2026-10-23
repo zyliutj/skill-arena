@@ -83,7 +83,7 @@ def artifact(path):
 CSS = '''body{margin:0;background:#f2f5fa;color:#1f2e46;font:16px/1.8 system-ui,"Microsoft YaHei",sans-serif}main{max-width:1100px;margin:auto;padding:32px 24px 80px}header{background:#122842;color:white;padding:36px;border-radius:20px}header p{color:#d1e1ef}.eyebrow{letter-spacing:.16em;font-size:12px;color:#73dccb}h1{font-size:34px;margin:8px 0}h2{font-size:23px}h3{overflow-wrap:anywhere}nav{position:sticky;top:0;background:#f2f5faf5;z-index:2;padding:14px 0;display:flex;gap:8px;flex-wrap:wrap}button,nav a{background:white;border:1px solid #c9d6e5;border-radius:9px;padding:8px 12px;color:#183858;font:inherit;cursor:pointer;text-decoration:none}button:hover,nav a:hover{background:#e1f3f0}.panel{background:white;border:1px solid #dce4ef;border-radius:16px;padding:26px;margin:24px 0;scroll-margin-top:120px}.meta{background:#f4f7fb;border-radius:12px;padding:12px 22px}.meta li{margin:5px 0}details{margin:12px 0;border:1px solid #e1e7ef;border-radius:10px}summary{cursor:pointer;font-weight:650;padding:12px 16px;background:#f7f9fc;border-radius:10px}details>div{padding:8px 18px 18px}.chapter{border-left:3px solid #39a999}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}th,td{border:1px solid #dce4ed;padding:10px;text-align:left;vertical-align:top}th{background:#edf3f9}p,li,td{overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#eef3f8;padding:16px;border-radius:8px;font-size:13px}code{background:#edf2f7;padding:1px 4px}a{color:#116f9b}img{max-width:100%;height:auto}.flow{display:flex;flex-wrap:wrap;align-items:center;gap:9px;list-style:none;padding:0}.flow li{background:#e7f6f2;border:1px solid #bdded5;padding:10px 16px;border-radius:9px}.flow li:not(:last-child):after{content:" →";color:#33816e}.muted{color:#62718a;font-size:14px}@media(max-width:600px){main{padding:16px 10px}header,.panel{padding:20px}h1{font-size:27px}nav{position:static}}@media print{nav{display:none}body{background:white}.panel{break-before:page}}'''
 JS = '''document.querySelectorAll('[data-toggle]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('details').forEach(d=>d.open=b.dataset.toggle==='open')}));document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>{const t=document.querySelector(a.getAttribute('href'));if(t){t.querySelectorAll('details').forEach(d=>{if(d.classList.contains('body'))d.open=true})}}));'''
 
-def render(run, mapping, rows, title, safe_child, next_step):
+def render(run, mapping, rows, title, safe_child, next_step, delivery=None):
     read = lambda p: json.loads(p.read_text(encoding='utf-8-sig'))
     meta = {x['id']: x for x in read(run/'discovery.json').get('candidates', [])} if (run/'discovery.json').exists() else {}
     presentation = read(run/'presentation.json') if (run/'presentation.json').exists() else {}
@@ -110,7 +110,15 @@ def render(run, mapping, rows, title, safe_child, next_step):
             path = safe_child(run/'variants'/ident, rel)
             body = rel == 'answer.md' or n == 0
             label = '完整方案' if body else '参考资料' if rel == 'sources.md' else rel
-            card += '<details class="'+('body' if body else 'attachment')+'"'+(' open' if body else '')+'><summary>'+E(label)+'</summary><div>'+artifact(path)+'<p><a download="'+E(path.name,quote=True)+'" href="data:application/octet-stream;base64,'+base64.b64encode(path.read_bytes()).decode()+'">下载原始文件</a></p></div></details>'
+            entry = next((x for x in (delivery or {}).get('artifacts', []) if x['path'] == 'variants/'+ident+'/'+rel), None)
+            if entry and not entry['included']:
+                content = '<p>大附件按需传输 · '+str(entry['bytes'])+' 字节 · 尚未同步</p><p>远程位置：'+E(delivery['source_host']+' : '+entry['source_path'])+'</p>'
+            elif delivery:
+                content = artifact(path) if path.suffix.lower() in {'.md','.txt','.json','.csv','.py','.png','.jpg','.jpeg','.gif','.webp'} else '<p>附件随交付包提供。</p>'
+                content += '<p><a download href="'+E('variants/'+ident+'/'+rel,quote=True)+'">下载原始文件</a> · 随包传输，完成状态见 delivery-receipt.json</p>'
+            else:
+                content = artifact(path)+'<p><a download="'+E(path.name,quote=True)+'" href="data:application/octet-stream;base64,'+base64.b64encode(path.read_bytes()).decode()+'">下载原始文件</a></p>'
+            card += '<details class="'+('body' if body else 'attachment')+'"'+(' open' if body else '')+'><summary>'+E(label)+'</summary><div>'+content+'</div></details>'
         sections.append(card+'</section>')
     assessment = '<section class="panel" id="evaluation"><h2>评估与比较</h2><p class="muted">分数仅适用于本次结果，接近时可并列；不代表技能的稳定优劣。</p><div class="table-wrap"><table><tr><th>候选</th><th>排名</th><th>状态</th><th>质量分</th><th>主要判断</th></tr>'
     for r in rows:
@@ -136,6 +144,7 @@ def render(run, mapping, rows, title, safe_child, next_step):
         for p in [run/'variants'/item['id']/'execution.json',run/'snapshots'/(item.get('skill_id') or item['id'])/'SKILL.md']:
             if p.exists(): records += '<details><summary>'+E(item['id']+' / '+p.name)+'</summary><div>'+artifact(p)+'</div></details>'
     records += '</div></details>'
+    if delivery: records = '<p class="muted">报告优先交付；完整运行记录保留在执行主机。大附件位置见各方案，传输完成情况以本地回执为准。</p>'
     brief = presentation.get('task_summary','本页收录各候选的完整产物。先阅读方案，再查看末尾评估。')
     task = '<details><summary>查看完整任务要求</summary><div>'+artifact(run/'task.md')+'</div></details>'
     return '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+E(title)+'</title><style>'+CSS+'</style></head><body><main><header><span class="eyebrow">SKILL ARENA / READER</span><h1>'+E(title)+'</h1><p>'+E(brief)+'</p></header><nav><button data-toggle="open">全部展开</button><button data-toggle="close">全部收起</button>'+''.join(nav)+'<a href="#evaluation">查看评估</a></nav>'+task+''.join(sections)+assessment+'<p>'+E(next_step)+'</p>'+records+'</main><script>'+JS+'</script></body></html>'
