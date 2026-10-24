@@ -19,6 +19,8 @@ For example, to plan a journal paper, it selects 3–5 relevant academic skills,
 
 ## How do I use it?
 
+On first use, choose a local file directory and whether to remember it globally. A fixed directory is reused without asking again; you can also use it for this task only.
+
 Add this project to Codex as a skill, then say:
 
 > Use $skill-arena to plan an English journal paper on reinforcement learning for structural design.
@@ -86,19 +88,17 @@ Close scores may tie. Uncertainty is disclosed. A better result in one task does
 
 ## What if I run it on a remote server?
 
-Skill Arena checks where it is running and prefers delivering final results to your computer:
+Skill Arena first asks whether to send the final report to your computer, using the directory confirmed above.
 
-- **Deliver the final report locally first:** the skill chooses the available, authorized channel expected to finish fastest, based on connection state and file size.
-- **Download other files on demand:** the report lists their remote locations; attachments are not transferred automatically.
-- **Your computer is not reachable:** keep the remote files and explain their location and the limitation.
+- **You choose delivery and a direct channel works:** it selects the channel expected to finish fastest, transfers the report, and verifies it locally.
+- **Direct delivery is unavailable:** choose “Transfer through a reverse connection” or “Download it myself without Codex assistance.”
+- **You decline delivery or choose manual download:** it provides the remote location and download instructions, then stops automatic transfer.
 
-**Delivery is complete only after the report is read and checksum-verified on your computer.** If it has not arrived, the skill tries available channels or explains the blocker; a remote path alone is not completion.
+Reverse transfer uses a temporary connection that closes afterward. Other files remain available on demand. “Delivered locally” requires successful verification on your computer.
 
-Provide your local destination once; it is remembered per client computer. Intermediate files stay remote. Matching files are verified and skipped on retries.
+> Use $skill-arena to plan my paper. Use D:\CodexFiles for temporary files and remember it as my fixed directory.
 
-> Use $skill-arena on the remote server to plan my paper. Save the final results to D:\Research on my computer.
-
-Automatic delivery requires an existing mount, file connector, or SSH channel. A local path alone does not grant the server access to your computer.
+Directory preferences are stored per computer; a server path is never treated as your local path.
 
 <details>
 <summary><strong>Want the detailed rules?</strong></summary>
@@ -110,6 +110,7 @@ The operational references below are currently in Chinese.
 - [Candidate selection](references/discovery.md)
 - [Report presentation](references/reporting.md)
 - [Evaluation](references/evaluation.md)
+- [First-use directory and global memory](references/onboarding.md)
 - [Remote execution and local delivery](references/delivery.md)
 - [File and record management](references/storage.md)
 - [Refinement and continuation](references/continuation.md)
