@@ -10,6 +10,34 @@ spec.loader.exec_module(arena)
 
 
 class ArenaTest(unittest.TestCase):
+    def test_mixed_members_require_distinct_eligible_skills(self):
+        members = [{'id': x, 'stars_status': 'known', 'stars': 500,
+                    'stars_checked_at': '2026-10-26'} for x in ('one', 'two')]
+        record = {'kind': 'mixed-baseline', 'members': members}
+        self.assertTrue(arena.selection_gate(record)['eligible'])
+        members[1]['stars'] = 499
+        self.assertFalse(arena.selection_gate(record)['eligible'])
+        members[1].update(user_specified=True, user_specified_evidence='Named by user')
+        self.assertTrue(arena.selection_gate(record)['eligible'])
+        record['members'] = members[:1]
+        self.assertFalse(arena.selection_gate(record)['eligible'])
+        record['members'] = [members[0], members[0]]
+        self.assertFalse(arena.selection_gate(record)['eligible'])
+
+    def test_mixed_label_removal_and_continuation(self):
+        self.fixture()
+        mapping = arena.read(self.run / 'mapping.json')
+        item = next(x for x in mapping.values() if x['id'] == 'one')
+        item.update(kind='mixed-baseline', members=[{'id':'first'},{'id':'second'}])
+        arena.write(self.run / 'mapping.json', mapping)
+        arena.report(self.run)
+        self.assertEqual(arena.candidate_label(item), '多 skill 协作基线')
+        with self.assertRaises(ValueError): arena.lowest_two(self.run)
+        child = arena.followup(self.root, 'test', 'next', {'mode':'continue', 'variants':['one'], 'instruction':'Next task'})
+        parent = arena.read(child / 'lineage.json')['parents'][0]
+        self.assertEqual(parent['members'], item['members'])
+        self.assertIn('多 skill 协作基线', (self.run/'report.html').read_text(encoding='utf-8'))
+
     def test_stars_gate_boundary_and_user_exception(self):
         record = {'id': 'candidate', 'status': 'selected', 'source': 'https://github.com/example/repo',
                   'stars_status': 'known', 'stars': 499, 'stars_checked_at': '2026-10-23'}

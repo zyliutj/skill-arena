@@ -91,6 +91,7 @@ def render(run, mapping, rows, title, safe_child, next_step, delivery=None):
     for item in mapping.values():
         ident = item['id']; name = item.get('display_name') or item.get('skill_id') or ident
         baseline = item.get('kind') == 'baseline' or ident == 'baseline'
+        if item.get('kind') == 'mixed-baseline': name = '多 skill 协作基线'
         if baseline: name = '普通提示词（无 skill）'
         data = {**meta.get(item.get('skill_id') or ident, {}), **item}
         view = presentation.get('candidates', {}).get(ident, {})
@@ -100,6 +101,11 @@ def render(run, mapping, rows, title, safe_child, next_step, delivery=None):
         source_html = '<a href="'+E(source,quote=True)+'">'+E(data.get('repository') or source)+'</a>' if source.startswith(('https://','http://')) else '不适用' if baseline else '未记录'
         stars = str(data.get('stars')) if data.get('stars_status') == 'known' else '不适用' if baseline or data.get('stars_status')=='not_applicable' else '未获取'
         if data.get('stars_display'): stars = str(data['stars_display'])
+        if item.get('kind') == 'mixed-baseline':
+            source_html = '多个 skill 成员（详见运行记录）'
+            stars = '不适用（成员分别核验，不合计）'
+            data.setdefault('description', '优先按子任务优势组合多个 skill，独立整合完整方案。')
+            data.setdefault('project_updated_at', '成员分别记录')
         checked = data.get('metadata_checked_at') or data.get('stars_checked_at')
         info = [('项目来源',source_html),('stars',E(stars)),('项目简介',E(str(data.get('description') or ('不加载候选 skill，以普通提示词完成相同任务。' if baseline else '未记录')))),('项目最新更新时间',E(str(data.get('project_updated_at') or ('不适用' if baseline else '未获取'))))]
         card = '<section class="panel" id="candidate-'+E(ident)+'"><h2>'+E(name)+'</h2><ul class="meta">'+''.join('<li><strong>'+k+'：</strong>'+v+'</li>' for k,v in info)+'</ul>'

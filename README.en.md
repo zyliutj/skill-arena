@@ -40,7 +40,7 @@ Not installed yet? Download this project and ask Codex to **“Read this project
 | **Compare results** | Rankings and evidence against the same task requirements |
 | **Keep records** | Full outputs, a comparison report, and skill sources for future reuse |
 
-All candidates use the **same Codex model**. Equal runtime or token budgets are not required. Initial comparisons also include a plain-prompt baseline.
+All candidates use the **same Codex model**. Equal runtime or token budgets are not required. Full comparisons include two fixed references: a **plain-prompt baseline** and a **multi-skill collaboration baseline**. The latter prioritizes complementary skills for subtasks such as literature review, hypothesis generation, and experiment critique, then integrates its own work without reading or combining other candidates’ answers.
 
 ## How are candidates selected?
 

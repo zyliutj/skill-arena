@@ -69,6 +69,15 @@ def register(root, record):
 
 def selection_gate(record):
     """Stars eligibility for new selections; never re-rank historical outputs."""
+    if record.get('kind') == 'mixed-baseline':
+        members = record.get('members', [])
+        ids = [m.get('id') for m in members]
+        if len(members) < 2 or any(not x for x in ids) or len(set(ids)) != len(ids):
+            return {'eligible': False, 'reason': 'mixed baseline requires two distinct skill members'}
+        if any(m.get('kind') in {'baseline','mixed-baseline'} for m in members):
+            return {'eligible': False, 'reason': 'members must be skills or toolkits'}
+        gates = [selection_gate(m) for m in members]
+        return {'eligible': all(g['eligible'] for g in gates), 'reason': 'mixed member checks', 'members': gates}
     state = record.get('stars_status', 'unknown')
     if state not in {'known', 'unknown', 'not_applicable'}:
         raise ValueError('Invalid stars status')
@@ -250,6 +259,7 @@ def candidate_label(item, summary=''):
     name = item.get('display_name') or item.get('skill_id') or item['id']
     if item.get('kind') == 'baseline' or item['id'] == 'baseline':
         name = '普通提示词（无 skill）'
+    if item.get('kind') == 'mixed-baseline': name = '多 skill 协作基线'
     return str(name) + (' — ' + ' '.join(summary.split())[:70] if summary else '')
 
 
@@ -262,7 +272,7 @@ def lowest_two(run):
     for row in ranking:
         item = mapping[row['id']]
         score = row.get('total')
-        if (item.get('kind') != 'baseline' and item['id'] != 'baseline'
+        if (item.get('kind') not in {'baseline', 'mixed-baseline'} and item['id'] != 'baseline'
                 and row['status'] == 'eligible' and type(score) in (int, float)
                 and math.isfinite(score)):
             skills.append((score, item['id']))
@@ -435,7 +445,10 @@ def resolve_feedback(root, run_id, record):
                                   'sha256': hashlib.sha256(p.read_bytes()).hexdigest()})
             if not artifacts:
                 raise ValueError('Selected branch has no artifacts')
-        parents.append({'variant_id': variant, 'artifacts': artifacts})
+        parent = {'variant_id': variant, 'artifacts': artifacts}
+        if available[variant].get('kind') == 'mixed-baseline':
+            parent.update(kind='mixed-baseline', members=available[variant].get('members', []))
+        parents.append(parent)
     return {'run_id': run_id, 'mode': mode, 'variants': variants,
             'instruction': instruction.strip(), 'user_message': user_message, 'parents': parents,
             **adjustment}
