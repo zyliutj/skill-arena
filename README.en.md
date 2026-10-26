@@ -46,7 +46,7 @@ All candidates use the **same Codex model**. Equal runtime or token budgets are 
 
 The initial search considers about **8–12 candidates** from different sources. Task fit, workflow, compatibility, **GitHub stars**, and maintenance guide the choice of 3–5 candidates. Projects you name are reviewed explicitly. If too few suitable candidates exist, the report says so.
 
-**GitHub skills or toolkits with fewer than 10 stars are excluded unless you explicitly name them.** Projects with unverified star counts are not automatically selected; a shortage of candidates does not lower the threshold.
+**GitHub skills or toolkits with fewer than 500 stars are excluded unless you explicitly name them.** Projects with unverified star counts are not automatically selected; a shortage of candidates does not lower the threshold.
 
 Both individual skills and complete toolkits can participate. A toolkit may use its internal modules, while candidates remain independent. Internal agents also use the same model. **Stars inform selection; actual outputs determine quality scores.**
 

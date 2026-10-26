@@ -12,12 +12,12 @@ spec.loader.exec_module(arena)
 class ArenaTest(unittest.TestCase):
     def test_stars_gate_boundary_and_user_exception(self):
         record = {'id': 'candidate', 'status': 'selected', 'source': 'https://github.com/example/repo',
-                  'stars_status': 'known', 'stars': 9, 'stars_checked_at': '2026-10-23'}
+                  'stars_status': 'known', 'stars': 499, 'stars_checked_at': '2026-10-23'}
         self.assertFalse(arena.selection_gate(record)['eligible'])
         path = self.root / 'discovery.json'
         arena.write(path, {'candidates': [record]})
         with self.assertRaises(ValueError): arena.check_selection(path)
-        record['stars'] = 10
+        record['stars'] = 500
         self.assertTrue(arena.selection_gate(record)['eligible'])
         record.update(stars=0, user_specified=True, user_specified_evidence='User explicitly requested this project')
         arena.write(path, {'candidates': [record]})

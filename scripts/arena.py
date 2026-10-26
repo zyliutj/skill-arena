@@ -86,7 +86,7 @@ def selection_gate(record):
     if specified:
         return {'eligible': True, 'reason': 'user-specified exception'}
     if state == 'known':
-        return {'eligible': stars >= 10, 'reason': 'stars >= 10' if stars >= 10 else 'stars < 10'}
+        return {'eligible': stars >= 500, 'reason': 'stars >= 500' if stars >= 500 else 'stars < 500'}
     github = str(record.get('source', '')).startswith(('https://github.com/', 'http://github.com/')) or bool(record.get('repository'))
     if state == 'not_applicable' and not github:
         return {'eligible': True, 'reason': 'stars not applicable'}
