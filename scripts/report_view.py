@@ -87,12 +87,15 @@ def render(run, mapping, rows, title, safe_child, next_step, delivery=None):
     read = lambda p: json.loads(p.read_text(encoding='utf-8-sig'))
     meta = {x['id']: x for x in read(run/'discovery.json').get('candidates', [])} if (run/'discovery.json').exists() else {}
     presentation = read(run/'presentation.json') if (run/'presentation.json').exists() else {}
-    nav = []; sections = []
+    nav = []; sections = []; labels = {}
+    mapping = dict(sorted(mapping.items(), key=lambda pair: pair[1].get('scheme_number', list(mapping).index(pair[0]) + 1)))
     for item in mapping.values():
         ident = item['id']; name = item.get('display_name') or item.get('skill_id') or ident
         baseline = item.get('kind') == 'baseline' or ident == 'baseline'
         if item.get('kind') == 'mixed-baseline': name = '多 skill 协作基线'
         if baseline: name = '普通提示词（无 skill）'
+        name = '方案' + str(item.get('scheme_number', len(labels) + 1)) + ' · ' + str(name)
+        labels[ident] = name
         data = {**meta.get(item.get('skill_id') or ident, {}), **item}
         view = presentation.get('candidates', {}).get(ident, {})
         data.update(view.get('metadata', {}))
@@ -129,11 +132,11 @@ def render(run, mapping, rows, title, safe_child, next_step, delivery=None):
         sections.append(card+'</section>')
     assessment = '<section class="panel" id="evaluation"><h2>评估与比较</h2><p class="muted">分数仅适用于本次结果，接近时可并列；不代表技能的稳定优劣。</p><div class="table-wrap"><table><tr><th>候选</th><th>排名</th><th>状态</th><th>质量分</th><th>主要判断</th></tr>'
     for r in rows:
-        item = mapping[r['id']]; name = item.get('display_name') or item['id']
+        item = mapping[r['id']]; name = labels[item['id']]
         assessment += '<tr><td>'+E(name)+'</td><td>'+str(r['rank'] or '—')+'</td><td>'+E(r['status'])+'</td><td>'+('—' if r['total'] is None else f'{r["total"]:.1f}')+'</td><td>'+E(r['summary'])+'</td></tr>'
     assessment += '</table></div>'
     for r in rows:
-        name = mapping[r['id']].get('display_name') or mapping[r['id']]['id']
+        name = labels[mapping[r['id']]['id']]
         assessment += '<details><summary>'+E(name)+' · 评分依据</summary><div><ul>'
         for key,label in [('strengths','优点'),('weaknesses','不足'),('best_for','适用场景'),('uncertainty','不确定性')]: assessment += '<li><b>'+label+'：</b>'+E(r[key])+'</li>'
         assessment += '</ul>'

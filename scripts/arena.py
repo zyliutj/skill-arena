@@ -102,9 +102,22 @@ def selection_gate(record):
     return {'eligible': False, 'reason': 'stars pending verification'}
 
 
+def validate_comparison(items, mode='followup'):
+    if not items or len(items) > 4:
+        raise ValueError('Expected 1–4 plans including baselines')
+    if mode == 'full':
+        kinds = [x.get('kind', 'skill') for x in items]
+        if kinds.count('baseline') != 1 or kinds.count('mixed-baseline') != 1:
+            raise ValueError('Full comparison requires both fixed baselines exactly once')
+    elif mode != 'followup':
+        raise ValueError('Unknown comparison mode')
+
+
 def check_selection(path):
     candidates = read(path)['candidates']
     failures = []
+    selected = [x for x in candidates if x.get('status') == 'selected']
+    validate_comparison(selected, read(path).get('comparison_mode', 'followup'))
     for record in candidates:
         if record.get('status') == 'selected':
             gate = selection_gate(record)
@@ -226,8 +239,8 @@ def snapshot(run, skill_id, source):
 def packet(run, manifest):
     run = Path(run)
     ids = [x['id'] for x in manifest]
-    if len(set(ids)) != len(ids) or not ids or len(ids) > 26:
-        raise ValueError('Expected 1–26 unique variants')
+    if len(set(ids)) != len(ids) or not ids or len(ids) > 4:
+        raise ValueError('Expected 1–4 unique variants')
     for item in manifest:
         identifier(item['id'])
         source = safe_child(run / 'variants', item['id'])
@@ -235,7 +248,9 @@ def packet(run, manifest):
             raise ValueError('Missing variant: ' + item['id'])
     dest = run / 'judge-packet'
     dest.mkdir(exist_ok=False)
-    order = list(manifest)
+    mode = read(run / 'protocol.json').get('comparison_mode', 'followup') if (run / 'protocol.json').exists() else 'followup'
+    validate_comparison(manifest, mode)
+    order = [dict(item, scheme_number=i) for i, item in enumerate(manifest, 1)]
     random.SystemRandom().shuffle(order)
     mapping = {}
     for i, item in enumerate(order):
@@ -260,6 +275,7 @@ def candidate_label(item, summary=''):
     if item.get('kind') == 'baseline' or item['id'] == 'baseline':
         name = '普通提示词（无 skill）'
     if item.get('kind') == 'mixed-baseline': name = '多 skill 协作基线'
+    name = ('方案' + str(item['scheme_number']) + ' · ' if item.get('scheme_number') else '') + str(name)
     return str(name) + (' — ' + ' '.join(summary.split())[:70] if summary else '')
 
 
@@ -304,7 +320,7 @@ def interaction(run, rows, mapping):
         'selection': {'questions': [{'title': '使用哪些方案？单项可点选；多项请在输入框写出名称，并补充修改要求或下一项任务。',
           'options': [c['label'] for c in candidates]}]},
         'adjustment': {'questions': [
-          {'title': '是否增加两款尚未尝试、适合当前任务的 skill？', 'options': ['增加 2 款新 skill', '不增加']},
+          {'title': '是否调查两款新 skill？满额时需替换现有独立候选，正式评估最多四个方案。', 'options': ['增加 2 款新 skill', '不增加']},
           {'title': '下一轮移除哪些候选？只退出下一轮，历史文件保留；也可输入具体名称。',
            'options': ['保留现有候选', '我来指定移除的候选', low_option]}]},
         'candidates': candidates, 'lowest_two': low, 'lowest_two_unavailable_reason': reason,
@@ -324,6 +340,8 @@ def report(run):
     if not valid_number(threshold) or not 0 <= threshold <= 100:
         raise ValueError('Invalid tie threshold')
     mapping = read(run / 'mapping.json')
+    for i, item in enumerate(mapping.values(), 1): item.setdefault('scheme_number', i)
+    mapping = dict(sorted(mapping.items(), key=lambda pair: pair[1]['scheme_number']))
     rows = read(run / 'evaluation' / 'judge.json')['results']
     ids = [r['id'] for r in rows]
     if not rows or len(set(ids)) != len(ids) or set(ids) != set(mapping):
@@ -380,7 +398,7 @@ def report(run):
             lines += [f'- [{rel}](<{p.as_uri()}>)']
         lines += ['']
     first = candidate_label(mapping[rows[0]['id']])
-    next_step = f'回到会话即可选择优化、重做、继续下一步或调整候选，并输入具体要求。也可直接说“优化 {first}：改进要求”或“先保留 {first}”。都不满意时，可增加两款新 skill，并选择移除指定候选或评分最低的两款；历史结果保留。'
+    next_step = f'回到会话即可选择优化、重做、继续下一步或调整候选，并输入具体要求。也可直接说“优化 {first}：改进要求”或“先保留 {first}”。都不满意时，可调查两款新 skill，并选择替换指定候选或评分最低的两款；完整对比最多四个方案；历史结果保留。'
     lines += ['## 接下来', '', next_step, '']
     (run / 'report.md').write_text('\n'.join(lines), encoding='utf-8')
     (run / 'report.html').write_text(render_reader(run, mapping, rows, title, safe_child, next_step), encoding='utf-8')

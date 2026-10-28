@@ -1,5 +1,7 @@
 # 可复制提示词模板
 
+完整对比在 protocol.json 和 discovery.json 写 comparison_mode: full，最多四个方案且包含两条固定基线；局部接续写 followup。派发前冻结每个方案的 scheme_number，匿名评估包不透露该映射。
+
 变量均由协调代理替换为真实内容/绝对路径。未替换完不派发。不要把其他候选提示词附给生成者。
 
 ## 用户入口

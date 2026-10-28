@@ -10,6 +10,25 @@ spec.loader.exec_module(arena)
 
 
 class ArenaTest(unittest.TestCase):
+    def test_comparison_limit_and_fixed_baselines(self):
+        items = [{'id':'plain','kind':'baseline'}, {'id':'mixed','kind':'mixed-baseline'}, {'id':'first'}, {'id':'second'}]
+        arena.validate_comparison(items, 'full')
+        with self.assertRaises(ValueError): arena.validate_comparison(items + [{'id':'extra'}], 'full')
+        with self.assertRaises(ValueError): arena.validate_comparison(items[1:], 'full')
+        arena.validate_comparison(items[2:3], 'followup')
+
+    def test_numbering_survives_anonymization_and_ranking(self):
+        self.fixture()
+        mapping = arena.read(self.run/'mapping.json')
+        self.assertEqual({x['id']:x['scheme_number'] for x in mapping.values()}, {'one':1,'two':2,'failed':3})
+        arena.report(self.run)
+        ui = arena.read(self.run/'interaction.json')
+        page = (self.run/'report.html').read_text(encoding='utf-8')
+        for c in ui['candidates']:
+            n = {'one':1,'two':2,'failed':3}[c['variant_id']]
+            self.assertTrue(c['label'].startswith('方案'+str(n)+' · '))
+            self.assertIn('方案'+str(n)+' · '+c['variant_id'], page)
+
     def test_mixed_members_require_distinct_eligible_skills(self):
         members = [{'id': x, 'stars_status': 'known', 'stars': 500,
                     'stars_checked_at': '2026-10-26'} for x in ('one', 'two')]
@@ -31,7 +50,7 @@ class ArenaTest(unittest.TestCase):
         item.update(kind='mixed-baseline', members=[{'id':'first'},{'id':'second'}])
         arena.write(self.run / 'mapping.json', mapping)
         arena.report(self.run)
-        self.assertEqual(arena.candidate_label(item), '多 skill 协作基线')
+        self.assertEqual(arena.candidate_label(item), '方案1 · 多 skill 协作基线')
         with self.assertRaises(ValueError): arena.lowest_two(self.run)
         child = arena.followup(self.root, 'test', 'next', {'mode':'continue', 'variants':['one'], 'instruction':'Next task'})
         parent = arena.read(child / 'lineage.json')['parents'][0]
@@ -248,10 +267,10 @@ class ArenaTest(unittest.TestCase):
         self.assertIsNone(result[0]['rank'])
         page = (self.run / 'report.html').read_text(encoding='utf-8')
         self.assertIn('方案质量检查', page)
-        self.assertIn('先保留 one', page)
+        self.assertIn('先保留 方案1 · one', page)
         ui = arena.read(self.run / 'interaction.json')
         self.assertEqual(ui['candidates'][0]['variant_id'], 'one')
-        self.assertTrue(ui['selection']['questions'][0]['options'][0].startswith('one — '))
+        self.assertTrue(ui['selection']['questions'][0]['options'][0].startswith('方案1 · one — '))
 
     def test_adjust_add_and_remove_preserves_originals(self):
         self.fixture()
@@ -317,7 +336,7 @@ class ArenaTest(unittest.TestCase):
         ui = arena.read(self.run / 'interaction.json')
         self.assertEqual(len(ui['adjustment']['questions']), 2)
         self.assertEqual(set(ui['lowest_two']), {'one', 'two'})
-        self.assertTrue(all(c['label'].startswith('Real skill ') for c in ui['candidates']))
+        self.assertTrue(all(c['label'].startswith('方案') and 'Real skill ' in c['label'] for c in ui['candidates']))
         self.assertIn('Real skill one', ui['adjustment']['questions'][1]['options'][2])
 
 

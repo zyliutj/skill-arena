@@ -15,7 +15,7 @@ When several skills look useful, Skill Arena helps you find out which one works 
 
 **Just describe your task. Attach materials if you have them; they are optional.**
 
-For example, to plan a journal paper, it selects 3–5 relevant academic skills, produces a full plan with each, and asks a separate Codex evaluator to explain their strengths, weaknesses, and suitable uses.
+For example, to plan a journal paper, it selects up to 2 relevant academic skills, produces a full plan with each, and asks a separate Codex evaluator to explain their strengths, weaknesses, and suitable uses.
 
 ## How do I use it?
 
@@ -35,7 +35,7 @@ Not installed yet? Download this project and ask Codex to **“Read this project
 
 | Step | What you receive |
 | --- | --- |
-| **Find candidates** | A broad search followed by 3–5 relevant skills or toolkits |
+| **Find candidates** | A broad search followed by up to 2 relevant skills or toolkits |
 | **Run independently** | A complete output from each candidate; toolkits can use their own modules |
 | **Compare results** | Rankings and evidence against the same task requirements |
 | **Keep records** | Full outputs, a comparison report, and skill sources for future reuse |
@@ -44,7 +44,7 @@ All candidates use the **same Codex model**. Equal runtime or token budgets are 
 
 ## How are candidates selected?
 
-The initial search considers about **8–12 candidates** from different sources. Task fit, workflow, compatibility, **GitHub stars**, and maintenance guide the choice of 3–5 candidates. Projects you name are reviewed explicitly. If too few suitable candidates exist, the report says so.
+The initial search considers about **8–12 candidates** from different sources. Task fit, workflow, compatibility, **GitHub stars**, and maintenance guide the choice of up to 2 candidates. Projects you name are reviewed explicitly. If too few suitable candidates exist, the report says so.
 
 **GitHub skills or toolkits with fewer than 500 stars are excluded unless you explicitly name them.** Projects with unverified star counts are not automatically selected; a shortage of candidates does not lower the threshold.
 
@@ -117,3 +117,5 @@ The operational references below are currently in Chinese.
 - [Research and design rationale](references/research.md)
 
 </details>
+
+Each full comparison has **at most four numbered plans**: a plain-prompt baseline, a multi-skill baseline, and up to two independent candidates. Discovery starts with relevant recommendations on social and promotional platforms, followed by source verification. Popularity does not override eligibility. Stable plan numbers appear in reports and chat choices; for example: “Refine Plan 3 with a stronger experiment design.” New candidates replace existing ones when slots are full.
