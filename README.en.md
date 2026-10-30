@@ -118,4 +118,4 @@ The operational references below are currently in Chinese.
 
 </details>
 
-Each full comparison has **at most four numbered plans**: a plain-prompt baseline, a multi-skill baseline, and up to two independent candidates. Discovery starts with relevant recommendations on social and promotional platforms, followed by source verification. Popularity does not override eligibility. Stable plan numbers appear in reports and chat choices; for example: “Refine Plan 3 with a stronger experiment design.” New candidates replace existing ones when slots are full.
+Each full comparison has **at most four numbered plans**: a plain-prompt baseline, a multi-skill baseline, and up to two independent candidates. Discovery starts with **find-skills** to search and shortlist skills for the task, then adds social and promotional recommendations and verifies the sources. Popularity does not override eligibility. Stable plan numbers appear in reports and chat choices; for example: “Refine Plan 3 with a stronger experiment design.” New candidates replace existing ones when slots are full.
