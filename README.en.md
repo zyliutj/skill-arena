@@ -44,7 +44,7 @@ All candidates use the **same Codex model**. Equal runtime or token budgets are 
 
 ## How are candidates selected?
 
-The initial search considers about **8–12 candidates** from different sources. Task fit, workflow, compatibility, **GitHub stars**, and maintenance guide the choice of up to 2 candidates. Projects you name are reviewed explicitly. If too few suitable candidates exist, the report says so.
+Discovery uses **find-skills only**, aiming for as many relevant, distinct candidates as possible, up to **10**. Task fit, workflow, compatibility, **GitHub stars**, and maintenance guide the choice of up to 2 candidates. Projects you name are reviewed explicitly. If too few suitable candidates exist, the report says so.
 
 **GitHub skills or toolkits with fewer than 500 stars are excluded unless you explicitly name them.** Projects with unverified star counts are not automatically selected; a shortage of candidates does not lower the threshold.
 
@@ -118,4 +118,4 @@ The operational references below are currently in Chinese.
 
 </details>
 
-Each full comparison has **at most four numbered plans**: a plain-prompt baseline, a multi-skill baseline, and up to two independent candidates. Discovery starts with **find-skills** to search and shortlist skills for the task, then adds social and promotional recommendations and verifies the sources. Popularity does not override eligibility. Stable plan numbers appear in reports and chat choices; for example: “Refine Plan 3 with a stronger experiment design.” New candidates replace existing ones when slots are full.
+Each full comparison has **at most four numbered plans**: a plain-prompt baseline, a multi-skill baseline, and up to two independent candidates. Discovery starts with **find-skills** to search and shortlist skills for the task, without additional discovery channels; only shortlisted execution candidates receive source checks. Popularity does not override eligibility. Stable plan numbers appear in reports and chat choices; for example: “Refine Plan 3 with a stronger experiment design.” New candidates replace existing ones when slots are full.
